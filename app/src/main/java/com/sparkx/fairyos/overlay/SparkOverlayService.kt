@@ -28,7 +28,7 @@ import kotlin.math.sqrt
 class SparkOverlayService : Service() {
 
     private var windowManager: WindowManager? = null
-    private var bubbleView: SparkOverlayBubbleView? = null
+    private var bubbleView: SparkOverlayAvatarView? = null   // Now using asset-backed avatar
     private var params: WindowManager.LayoutParams? = null
 
     private var currentMood = SparkMood.IDLE
@@ -75,7 +75,7 @@ class SparkOverlayService : Service() {
         createNotificationChannel()
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
 
-        bubbleView = SparkOverlayBubbleView(this)
+        bubbleView = SparkOverlayAvatarView(this)   // Asset-backed renderer
         params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
