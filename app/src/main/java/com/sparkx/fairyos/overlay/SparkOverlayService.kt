@@ -82,8 +82,8 @@ class SparkOverlayService : Service() {
             gravity = Gravity.TOP or Gravity.START
             x = 100
             y = 300
-            width = 280
-            height = 280
+            width = dp(144)
+            height = dp(144)
         }
 
         installTouchControls()
@@ -93,6 +93,10 @@ class SparkOverlayService : Service() {
         } catch (e: Exception) {
             // Overlay permission not granted
         }
+    }
+
+    private fun dp(value: Int): Int {
+        return (value * resources.displayMetrics.density).toInt()
     }
 
     private fun installTouchControls() {
@@ -186,6 +190,7 @@ class SparkOverlayService : Service() {
                     bubbleView?.updateMotion(0f, 0f)
 
                     if (!moved && !longPressed) {
+                        bubbleView?.triggerTapBurst()
                         openHome()
                     } else if (!isFreeRoam) {
                         snapToEdge()
@@ -320,7 +325,7 @@ class SparkOverlayService : Service() {
                     val safeLeft = 16f
                     val safeTop = 96f
                     val safeRight = (display.widthPixels - p.width - 16).coerceAtLeast(16).toFloat()
-                    val safeBottom = (display.heightPixels - p.height - 190).coerceAtLeast(96).toFloat()
+                    val safeBottom = (display.heightPixels - p.height - 210).coerceAtLeast(96).toFloat()
 
                     val dx = roamTargetX - roamFloatX
                     val dy = roamTargetY - roamFloatY
