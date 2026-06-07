@@ -27,7 +27,8 @@ enum class SparkWorldTheme {
     CRYSTAL_PHONE,
     ROYAL_AURA,
     SHADOW_GARDEN,
-    CYBER_SKY
+    CYBER_SKY,
+    MARS_OUTPOST
 }
 
 @Composable
@@ -73,6 +74,7 @@ fun HoloBackground(
             SparkWorldTheme.ROYAL_AURA -> drawRoyalAura(this, w, h, t, intensity)
             SparkWorldTheme.SHADOW_GARDEN -> drawShadowGarden(this, w, h, t, intensity)
             SparkWorldTheme.CYBER_SKY -> drawHoloDream(this, w, h, t, intensity)
+            SparkWorldTheme.MARS_OUTPOST -> drawMarsOutpost(this, w, h, t, intensity)
         }
 
         // Subtle vignette for readability
@@ -271,6 +273,58 @@ private fun drawShadowGarden(scope: DrawScope, w: Float, h: Float, t: Float, int
             val x = w * (0.15f + (i * 0.067f) % 0.7f)
             val y = h * (0.3f + sin(t * 0.8f + i) * 0.4f)
             drawCircle(Color(0xFFFF4D6D), 1.8f + sin(t * 5f + i) * 0.6f, Offset(x, y), alpha = (0.35f + sin(t * 4f + i) * 0.4f) * intensity)
+        }
+    }
+}
+
+private fun drawMarsOutpost(scope: DrawScope, w: Float, h: Float, t: Float, intensity: Float) {
+    with(scope) {
+        drawRect(Color(0xFF120807))
+
+        drawRect(
+            brush = Brush.verticalGradient(
+                listOf(
+                    Color(0xFF35130F).copy(alpha = 0.85f),
+                    Color(0xFF7A2B16).copy(alpha = 0.35f),
+                    Color(0xFF120807)
+                )
+            )
+        )
+
+        // Martian horizon
+        drawCircle(
+            color = Color(0xFF8E3B1F).copy(alpha = 0.35f * intensity),
+            radius = w * 0.75f,
+            center = Offset(w * 0.5f, h * 1.05f)
+        )
+
+        // Dust storm particles
+        for (i in 0..30) {
+            val x = ((i * 61f + t * 9f + sin(t * 0.7f + i) * 40f) % w)
+            val y = h * (0.18f + ((i * 0.037f + sin(t * 0.25f + i) * 0.08f) % 0.68f))
+            drawCircle(
+                color = Color(0xFFFFB36B),
+                radius = 1.2f + sin(t * 1.7f + i) * 0.5f,
+                center = Offset(x, y),
+                alpha = (0.18f + sin(t * 1.1f + i) * 0.12f).coerceIn(0.08f, 0.32f) * intensity
+            )
+        }
+
+        // Thin HUD grid
+        val hud = Color(0xFFFF8A50).copy(alpha = 0.10f * intensity)
+        for (x in 0..(w / 56f).toInt()) {
+            drawLine(hud, Offset(x * 56f, h * 0.52f), Offset(x * 56f, h), 1f)
+        }
+        for (y in 0..8) {
+            val yy = h * 0.52f + y * 44f
+            drawLine(hud, Offset(0f, yy), Offset(w, yy), 1f)
+        }
+
+        // Distant base lights
+        for (i in 0..5) {
+            val bx = w * (0.2f + i * 0.12f)
+            val by = h * 0.62f + sin(t * 0.4f + i) * 2f
+            drawCircle(Color(0xFF66E6FF), 2.2f, Offset(bx, by), alpha = 0.35f * intensity)
         }
     }
 }
