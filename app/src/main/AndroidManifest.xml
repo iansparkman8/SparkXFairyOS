@@ -27,7 +27,6 @@
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
-        android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.SparkXFairyOS"
         tools:targetApi="35">
@@ -61,10 +60,8 @@
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="fairy_companion_overlay" />
+            </property>
         </service>
-
-        <!-- Future Accessibility scaffold (commented, disabled) -->
-        <!-- <service ... > -->
 
     </application>
 
