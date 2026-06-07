@@ -1,15 +1,16 @@
 package com.sparkx.fairyos
 
 import android.app.Application
-import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.preferencesDataStore
-
-val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "sparkx_prefs")
+import com.sparkx.fairyos.domain.memory.TeachGrowRepository
 
 class SparkXApplication : Application() {
+
+    lateinit var teachGrowRepository: TeachGrowRepository
+        private set
+
     override fun onCreate() {
         super.onCreate()
-        // Init any global singletons if needed
+        teachGrowRepository = TeachGrowRepository(this)
+        // Future: init other singletons
     }
 }

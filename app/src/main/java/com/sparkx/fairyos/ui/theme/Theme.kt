@@ -5,16 +5,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-private val DarkColorScheme = darkColorScheme(
-    primary = Color(0xFF7B68EE),      // Medium slate blue - holographic
-    secondary = Color(0xFF00CED1),    // Dark turquoise
-    tertiary = Color(0xFFFF69B4),     // Hot pink accent
-    background = Color(0xFF0A0A12),
-    surface = Color(0xFF1A1A2E),
+private val DarkHoloColors = darkColorScheme(
+    primary = Color(0xFF9C7BFF),
+    secondary = Color(0xFF00E5FF),
+    tertiary = Color(0xFFFF6EC7),
+    background = Color(0xFF0D0B1A),
+    surface = Color(0xFF1A1530),
     onPrimary = Color.White,
-    onSecondary = Color.Black,
-    onBackground = Color(0xFFE0E0FF),
-    onSurface = Color(0xFFE0E0FF)
+    onBackground = Color(0xFFE0D4FF)
 )
 
 @Composable
@@ -22,9 +20,8 @@ fun SparkXFairyOSTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
-    val colorScheme = DarkColorScheme
     MaterialTheme(
-        colorScheme = colorScheme,
+        colorScheme = DarkHoloColors,
         typography = Typography(),
         content = content
     )
