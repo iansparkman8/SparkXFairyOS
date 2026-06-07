@@ -62,6 +62,14 @@ class SparkOverlayService : Service() {
     private var lastAssignedX = Int.MIN_VALUE
     private var lastAssignedY = Int.MIN_VALUE
 
+    // Position persistence
+    private val prefs by lazy {
+        getSharedPreferences("spark_overlay_prefs", Context.MODE_PRIVATE)
+    }
+
+    private val screenMarginPx: Int
+        get() = dp(16)
+
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
@@ -80,16 +88,23 @@ class SparkOverlayService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = 100
-            y = 300
             width = dp(144)
             height = dp(144)
         }
+
+        params?.let { restoreOverlayPosition(it) }
 
         installTouchControls()
 
         try {
             windowManager?.addView(bubbleView, params)
+
+            // Resume free-roam if it was active last time
+            if (prefs.getBoolean("free_roam_enabled", false)) {
+                mainHandler.postDelayed({
+                    setFreeRoamEnabled(true)
+                }, 600L)
+            }
         } catch (e: Exception) {
             // Overlay permission not granted
         }
@@ -97,6 +112,34 @@ class SparkOverlayService : Service() {
 
     private fun dp(value: Int): Int {
         return (value * resources.displayMetrics.density).toInt()
+    }
+
+    private fun restoreOverlayPosition(p: WindowManager.LayoutParams) {
+        val display = resources.displayMetrics
+
+        val savedX = prefs.getInt("overlay_x", Int.MIN_VALUE)
+        val savedY = prefs.getInt("overlay_y", Int.MIN_VALUE)
+
+        if (savedX != Int.MIN_VALUE && savedY != Int.MIN_VALUE) {
+            p.x = savedX.coerceIn(0, (display.widthPixels - p.width).coerceAtLeast(0))
+            p.y = savedY.coerceIn(0, (display.heightPixels - p.height).coerceAtLeast(0))
+        } else {
+            // Better first-run default: right side, upper area
+            p.x = (display.widthPixels - p.width - dp(18)).coerceAtLeast(0)
+            p.y = dp(160)
+        }
+
+        roamFloatX = p.x.toFloat()
+        roamFloatY = p.y.toFloat()
+    }
+
+    private fun saveOverlayPosition() {
+        val p = params ?: return
+        prefs.edit()
+            .putInt("overlay_x", p.x)
+            .putInt("overlay_y", p.y)
+            .putBoolean("free_roam_enabled", isFreeRoam)
+            .apply()
     }
 
     private fun installTouchControls() {
@@ -169,6 +212,7 @@ class SparkOverlayService : Service() {
 
                         try {
                             windowManager?.updateViewLayout(view, p)
+                            saveOverlayPosition()
                         } catch (_: Exception) {
                         }
                     }
@@ -221,6 +265,7 @@ class SparkOverlayService : Service() {
 
         try {
             windowManager?.updateViewLayout(view, p)
+            saveOverlayPosition()
         } catch (_: Exception) {
         }
     }
@@ -320,6 +365,10 @@ class SparkOverlayService : Service() {
         isFreeRoam = enabled
         bubbleView?.setFreeRoamActive(isFreeRoam)
 
+        prefs.edit()
+            .putBoolean("free_roam_enabled", isFreeRoam)
+            .apply()
+
         if (isFreeRoam) {
             params?.let {
                 roamFloatX = it.x.toFloat()
@@ -380,7 +429,6 @@ class SparkOverlayService : Service() {
                         roamVx = (roamVx * damping + dx * accel).coerceIn(-8.0f, 8.0f)
                         roamVy = (roamVy * damping + dy * accel).coerceIn(-6.5f, 6.5f)
 
-                        // Minimum visual movement floor so it cannot silently round to zero
                         if (abs(roamVx) < 0.65f && abs(dx) > 24f) {
                             roamVx = if (dx > 0f) 0.65f else -0.65f
                         }
@@ -409,6 +457,7 @@ class SparkOverlayService : Service() {
 
                         try {
                             windowManager?.updateViewLayout(view, p)
+                            saveOverlayPosition()
                         } catch (_: Exception) {
                         }
                     }
