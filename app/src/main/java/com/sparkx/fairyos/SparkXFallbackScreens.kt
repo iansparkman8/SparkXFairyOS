@@ -18,15 +18,53 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.sparkx.fairyos.domain.memory.TeachGrowEntry
 
-data class AppDrawerScreen(
-    val label: String,
-    val emoji: String
+@Composable
+fun AppDrawerScreen(
+    onLaunchApp: (String) -> Unit = {},
+    modifier: Modifier = Modifier
 ) {
-    companion object {
-        val Home = AppDrawerScreen("Home", "✨")
-        val TeachGrow = AppDrawerScreen("Teach & Grow", "🌱")
-        val AIProvider = AppDrawerScreen("AI Providers", "🧠")
-        val Settings = AppDrawerScreen("Settings", "⚙️")
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(22.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(text = "📱", color = Color.White)
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(text = "App Drawer", color = Color.White)
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "Quick launch shortcuts for Spark Baby.",
+            color = Color(0xFFB8AEE8)
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        QuickActionButton(
+            title = "Open Settings",
+            subtitle = "Launch Android Settings",
+            emoji = "⚙️",
+            onClick = { onLaunchApp("com.android.settings") }
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        QuickActionButton(
+            title = "Open Browser",
+            subtitle = "Launch default browser if available",
+            emoji = "🌐",
+            onClick = { onLaunchApp("browser") }
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        QuickActionButton(
+            title = "Open Assistant",
+            subtitle = "Placeholder shortcut",
+            emoji = "🧠",
+            onClick = { onLaunchApp("assistant") }
+        )
     }
 }
 
