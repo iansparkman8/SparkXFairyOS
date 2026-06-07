@@ -16,4 +16,20 @@ data class SparkGrowthState(
     val currentForm: SparkForm = SparkForm.DEFAULT_FAIRY,
     val lastFormChangeAt: Long = 0L,
     val allowSparkToSuggestForms: Boolean = true
-)
+) {
+    fun describe(): String {
+        val totalXp = learningXp + teachGrowXp + selfUpgradeXp + voiceXp
+        val formNames = unlockedForms.joinToString(", ") { it.displayName }
+        val traitNames = dominantTraits.joinToString(", ") { it.name.lowercase() }
+
+        return buildString {
+            append("I am currently a ${currentForm.displayName}. ")
+            append("Bond level $bondLevel. ")
+            append("Total experience: $totalXp. ")
+            append("I have learned $totalEntriesCount things. ")
+            if (bugReportCount > 0) append("Reported $bugReportCount bugs. ")
+            append("Unlocked forms: $formNames. ")
+            append("My dominant traits are $traitNames.")
+        }
+    }
+}
