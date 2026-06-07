@@ -11,6 +11,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.sparkx.fairyos.FairyForm
+import com.sparkx.fairyos.palette
 import com.sparkx.fairyos.domain.mood.SparkMood
 import kotlin.math.*
 
