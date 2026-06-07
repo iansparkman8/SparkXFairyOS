@@ -12,6 +12,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -22,7 +23,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -67,7 +67,6 @@ class MainActivity : ComponentActivity() {
         val app = application as SparkXApplication
         val repo = app.teachGrowRepository
 
-        // Owner mode from simple shared pref for v7
         val prefs = getSharedPreferences("sparkx_prefs", MODE_PRIVATE)
         isOwnerMode = prefs.getBoolean("owner_mode", false)
 
@@ -76,7 +75,7 @@ class MainActivity : ComponentActivity() {
             onMoodChange = { mood -> currentMood = mood },
             onSpeakingChange = { speaking -> isSpeaking = speaking },
             onCommandRecognized = { text -> handleVoiceCommand(text) },
-            onError = { msg -> /* show toast or log */ }
+            onError = { msg -> }
         )
         voiceController.initialize()
 
@@ -89,7 +88,6 @@ class MainActivity : ComponentActivity() {
             onHideOverlay = { hideOverlay() }
         )
 
-        // Load initial entries
         lifecycleScope.launch {
             repo.entriesFlow.collect { teachEntries.clear(); teachEntries.addAll(it) }
         }
@@ -112,7 +110,6 @@ class MainActivity : ComponentActivity() {
                         lifecycleScope.launch {
                             val entry = TeachGrowEntry(title = title, content = content, type = type)
                             repo.addEntry(entry)
-                            // refresh will come from flow
                         }
                     },
                     onLaunchApp = { pkg -> launchApp(pkg) },
@@ -166,8 +163,6 @@ class MainActivity : ComponentActivity() {
         currentMood = result.newMood
 
         if (result.requiresConfirmation && result.confirmationAction != null && isOwnerMode) {
-            // Show confirmation dialog in Compose via state (simplified here)
-            // For v7 we auto-confirm for demo; full version would show AlertDialog
             result.confirmationAction.invoke()
             voiceController.speak("Action confirmed and executed.")
         }
@@ -275,7 +270,8 @@ fun SparkXApp(
                     onToggleOverlay = onToggleOverlay,
                     onToggleOwnerMode = onToggleOwnerMode,
                     onNavigateToApps = { navController.navigate("apps") },
-                    onNavigateToTeach = { navController.navigate("teach") }
+                    onNavigateToTeach = { navController.navigate("teach") },
+                    isListening = isListening
                 )
             }
             composable("apps") { AppDrawerScreen(onLaunchApp = onLaunchApp) }
@@ -307,7 +303,8 @@ fun SparkXHomeScreen(
     onToggleOverlay: () -> Unit,
     onToggleOwnerMode: () -> Unit,
     onNavigateToApps: () -> Unit,
-    onNavigateToTeach: () -> Unit
+    onNavigateToTeach: () -> Unit,
+    isListening: Boolean = false
 ) {
     val context = LocalContext.current
     Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0D0B1A))) {
@@ -317,7 +314,6 @@ fun SparkXHomeScreen(
             modifier = Modifier.fillMaxSize().padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Header
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -333,7 +329,6 @@ fun SparkXHomeScreen(
 
             Spacer(Modifier.height(24.dp))
 
-            // Central Spark Baby
             SparkBabyAvatar(
                 mood = currentMood,
                 isSpeaking = isSpeaking,
@@ -353,7 +348,6 @@ fun SparkXHomeScreen(
 
             Spacer(Modifier.height(24.dp))
 
-            // Command Bar
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -374,7 +368,7 @@ fun SparkXHomeScreen(
                 }
                 IconButton(onClick = onMicClick) {
                     Icon(
-                        if (/* listening state */ false) Icons.Default.MicOff else Icons.Default.Mic,
+                        if (isListening) Icons.Default.MicOff else Icons.Default.Mic,
                         contentDescription = "Voice",
                         tint = Color(0xFFFF6EC7)
                     )
@@ -383,7 +377,6 @@ fun SparkXHomeScreen(
 
             Spacer(Modifier.height(20.dp))
 
-            // Quick Actions
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(onClick = onNavigateToApps, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6B4C9A))) {
                     Icon(Icons.Default.Apps, null); Spacer(Modifier.width(6.dp)); Text("Apps")
@@ -404,30 +397,27 @@ fun SparkXHomeScreen(
 
             Spacer(Modifier.weight(1f))
 
-            // Dock
             Row(
                 modifier = Modifier.fillMaxWidth().background(Color(0xFF1A1530)).padding(12.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                DockButton("Phone", "com.android.dialer") { /* launch */ }
-                DockButton("Messages", "com.google.android.apps.messaging") { }
-                DockButton("Camera", "com.android.camera2") { }
-                DockButton("Browser", "com.android.chrome") { }
-                DockButton("Spark", "com.sparkx.fairyos") { /* already home */ }
+                DockButton("Phone", "com.android.dialer", context)
+                DockButton("Messages", "com.google.android.apps.messaging", context)
+                DockButton("Camera", "com.android.camera2", context)
+                DockButton("Browser", "com.android.chrome", context)
+                DockButton("Spark", "com.sparkx.fairyos", context)
             }
         }
     }
 }
 
 @Composable
-fun DockButton(label: String, pkg: String, onClick: () -> Unit) {
-    val context = LocalContext.current
+fun DockButton(label: String, pkg: String, context: android.content.Context) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable {
         try {
             val i = context.packageManager.getLaunchIntentForPackage(pkg)
-            if (i != null) context.startActivity(i)
+            if (i != null) context.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         } catch (_: Exception) {}
-        onClick()
     }) {
         Icon(Icons.Default.Star, contentDescription = label, tint = Color(0xFF00E5FF))
         Text(label, fontSize = 11.sp, color = Color.White)
@@ -501,7 +491,6 @@ fun TeachGrowScreen(
                 Column {
                     OutlinedTextField(value = newTitle, onValueChange = { newTitle = it }, label = { Text("Title") })
                     OutlinedTextField(value = newContent, onValueChange = { newContent = it }, label = { Text("Content") }, modifier = Modifier.height(120.dp))
-                    // Simple type picker
                     Row { listOf("lesson","code","behavior","memory").forEach { t -> FilterChip(selected = newType == t, onClick = { newType = t }, label = { Text(t) }) } }
                 }
             },
@@ -559,7 +548,7 @@ fun AIProviderScreen() {
             Text("Save Key Securely")
         }
 
-        Text("Cloud features (summarize, deep chat) activate only when key is present. All processing respects your privacy.", fontSize = 12.sp, color = Color.Gray)
+        Text("Cloud features activate only when key is present. All processing respects your privacy.", fontSize = 12.sp, color = Color.Gray)
     }
 }
 
@@ -604,8 +593,3 @@ fun SettingsScreen(
         Text("SparkX FairyOS v7 — Privacy-first AI Launcher. All local by default. Cloud AI optional & user-keyed.", color = Color.Gray, fontSize = 12.sp)
     }
 }
-
-@Composable
-fun PermissionsScreen(...) { /* Can be expanded from settings or separate; for v7 integrated in Settings */ }
-
-// Note: Full Permissions dedicated screen can be added similarly if needed. For v7 this covers core flow. }
