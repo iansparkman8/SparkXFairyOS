@@ -24,13 +24,18 @@ jobs:
       with:
         gradle-version: 8.9
 
-    - name: Run preflight safety check
+    - name: Make gradlew executable if present (for future)
+      run: chmod +x gradlew || true
+
+    - name: Run preflight safety check (non-blocking)
       run: |
-        chmod +x scripts/preflight_check.sh || true
-        ./scripts/preflight_check.sh || echo "Preflight warnings (non-blocking for v7)"
+        if [ -f "scripts/preflight_check.sh" ]; then
+          chmod +x scripts/preflight_check.sh || true
+          ./scripts/preflight_check.sh || echo "Preflight warnings (non-blocking for now)"
+        fi
 
     - name: Assemble Debug APK
-      run: ./gradlew assembleDebug --stacktrace
+      run: gradle assembleDebug --stacktrace
 
     - name: Upload Debug APK artifact
       uses: actions/upload-artifact@v4
