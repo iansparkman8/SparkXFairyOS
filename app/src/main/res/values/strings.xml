@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SparkX FairyOS</string>
+    <string name="spark_baby">Spark Baby</string>
+    <string name="owner_mode_active">Owner Mode Active — All advanced actions require your confirmation</string>
+</resources>

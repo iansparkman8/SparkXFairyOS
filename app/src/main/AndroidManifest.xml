@@ -2,15 +2,23 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Core permissions for voice and notifications -->
+    <!-- Voice & notifications -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
-    <!-- SYSTEM_ALERT_WINDOW is requested at runtime -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-    <!-- INTERNET only for optional user-enabled cloud AI providers (OpenAI/Grok etc). Never used without explicit user consent and key. -->
+    <!-- Optional for cloud AI providers (user must enable + provide key) -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- For full app drawer on Android 11+ -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:ignore="QueryAllPackagesPermission" />
+
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
 
     <application
         android:name=".SparkXApplication"
@@ -21,9 +29,10 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@android:style/Theme.Material.NoActionBar"
+        android:theme="@style/Theme.SparkXFairyOS"
         tools:targetApi="35">
 
+        <!-- Main Launcher Activity - can be set as default Home app -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -32,8 +41,10 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
-            <!-- Handle shared text from other apps (remember/teach) -->
+            <!-- Receive shared text -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -41,7 +52,7 @@
             </intent-filter>
         </activity>
 
-        <!-- Floating Overlay Service - Owner approved visual companion -->
+        <!-- Floating Overlay Service -->
         <service
             android:name=".overlay.SparkOverlayService"
             android:enabled="true"
@@ -50,25 +61,10 @@
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="fairy_companion_overlay" />
-            <intent-filter>
-                <action android:name="com.sparkx.fairyos.OVERLAY_SERVICE" />
-            </intent-filter>
         </service>
 
-        <!-- Future scaffold placeholder for Accessibility (disabled by default, v8+) -->
-        <!-- 
-        <service
-            android:name=".overlay.SparkAccessibilityService"
-            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="android.accessibilityservice.AccessibilityService" />
-            </intent-filter>
-            <meta-data
-                android:name="android.accessibilityservice"
-                android:resource="@xml/accessibility_service_config" />
-        </service>
-        -->
+        <!-- Future Accessibility scaffold (commented, disabled) -->
+        <!-- <service ... > -->
 
     </application>
 
