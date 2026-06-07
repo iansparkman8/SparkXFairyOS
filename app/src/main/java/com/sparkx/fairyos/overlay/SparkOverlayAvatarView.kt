@@ -14,6 +14,7 @@ import android.view.View
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.FrameLayout
 import android.widget.ImageView
+import com.sparkx.fairyos.R
 import com.sparkx.fairyos.domain.mood.SparkMood
 import com.sparkx.fairyos.domain.personality.SparkForm
 import kotlin.math.cos
@@ -123,24 +124,17 @@ class SparkOverlayAvatarView(context: Context) : FrameLayout(context) {
     }
 
     private fun applyMoodAsset() {
-        val assetName = when {
-            isSpeaking -> "spark_fairy_speaking"
-            currentMood == SparkMood.HAPPY -> "spark_fairy_happy"
-            currentMood == SparkMood.THINKING -> "spark_fairy_thinking"
-            currentMood == SparkMood.LISTENING -> "spark_fairy_listening"
-            currentMood == SparkMood.ALERT -> "spark_fairy_alert"
-            currentMood == SparkMood.SLEEPY -> "spark_fairy_sleepy"
-            else -> "spark_fairy_idle"
+        val resId = when {
+            isSpeaking || currentMood == SparkMood.SPEAKING -> R.drawable.spark_fairy_speaking
+            currentMood == SparkMood.HAPPY -> R.drawable.spark_fairy_happy
+            currentMood == SparkMood.THINKING -> R.drawable.spark_fairy_thinking
+            currentMood == SparkMood.LISTENING -> R.drawable.spark_fairy_listening
+            currentMood == SparkMood.ALERT -> R.drawable.spark_fairy_alert
+            currentMood == SparkMood.SLEEPY -> R.drawable.spark_fairy_sleepy
+            else -> R.drawable.spark_fairy_idle
         }
 
-        val resId = resources.getIdentifier(assetName, "drawable", context.packageName)
-
-        if (resId != 0) {
-            fairyImage.setImageResource(resId)
-        } else {
-            // Compile-safe fallback. Real visual quality comes from drawable-nodpi assets.
-            fairyImage.setImageResource(android.R.drawable.star_big_on)
-        }
+        fairyImage.setImageResource(resId)
     }
 
     private fun startIdleFloat() {
