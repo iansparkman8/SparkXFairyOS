@@ -1,5 +1,7 @@
 package com.sparkx.fairyos.ui.theme
 
+import androidx.compose.ui.unit.dp
+
 object SparkDimens {
     val cornerRadius = 20.dp
     val cardPadding = 16.dp
