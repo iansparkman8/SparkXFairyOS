@@ -1,7 +1,8 @@
 package com.sparkx.fairyos.domain.ai
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import android.content.Context
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
@@ -10,77 +11,115 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.TimeUnit
 
-class SparkAIClient {
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
+/**
+ * Optional cloud AI client. Only used when user explicitly enables a provider and provides their own API key.
+ * Keys stored securely with EncryptedSharedPreferences + Android Keystore.
+ * No calls without user consent.
+ */
+class SparkAIClient(private val context: Context) {
+
+    private val masterKey = MasterKey.Builder(context)
+        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
         .build()
 
-    private val json = Json { ignoreUnknownKeys = true; isLenient = true }
+    private val prefs = EncryptedSharedPreferences.create(
+        context,
+        "sparkx_ai_keys",
+        masterKey,
+        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+    )
 
-    @Serializable
-data class ChatMessage(val role: String, val content: String)
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .build()
 
-    @Serializable
-data class ChatRequest(
-    val model: String,
-    val messages: List<ChatMessage>,
-    val max_tokens: Int = 300,
-    val temperature: Double = 0.7
-)
+    private val json = Json { ignoreUnknownKeys = true }
 
-    @Serializable
-data class ChatChoice(val message: ChatMessage)
+    enum class Provider { OPENAI, GROK, GEMINI, CLAUDE, LOCAL }
 
-    @Serializable
-data class ChatResponse(val choices: List<ChatChoice>? = null, val error: Map<String, String>? = null)
+    fun saveApiKey(provider: Provider, key: String) {
+        prefs.edit().putString(provider.name, key).apply()
+    }
 
-    suspend fun chat(
-        provider: AIProvider,
-        apiKey: String,
-        userMessage: String,
-        systemPrompt: String = "You are Spark Baby, a kind, playful, privacy-first holographic fairy companion living on the user's Android phone. Keep replies short, helpful, magical, and in character. Never ask for passwords or sensitive data."
-    ): String = withContext(Dispatchers.IO) {
-        if (apiKey.isBlank()) return@withContext "No API key set for ${provider.displayName}. Please add it in AI Providers screen."
-        if (provider == AIProvider.LOCAL) return@withContext "Local offline model not yet available in v7. Coming soon!"
+    fun getApiKey(provider: Provider): String? = prefs.getString(provider.name, null)
 
-        val endpoint = provider.endpoint
-        if (endpoint.isBlank()) return@withContext "This provider endpoint not configured in v7. Use OpenAI or Grok for now."
+    fun isProviderEnabled(provider: Provider): Boolean = getApiKey(provider) != null
 
-        try {
-            val messages = listOf(
-                ChatMessage("system", systemPrompt),
-                ChatMessage("user", userMessage)
-            )
-            val requestBody = ChatRequest(
-                model = provider.model,
-                messages = messages
-            )
+    suspend fun chat(provider: Provider, prompt: String, systemPrompt: String = "You are Spark Baby, a helpful, whimsical holographic fairy companion living on the user's Android phone. Keep replies short, friendly, and magical."): String {
+        val key = getApiKey(provider) ?: return "Please add your API key for ${provider.name} in the AI Console first."
 
-            val bodyJson = json.encodeToString(ChatRequest.serializer(), requestBody)
-            val requestBodyObj = bodyJson.toRequestBody("application/json; charset=utf-8".toMediaType())
-
-            val request = Request.Builder()
-                .url(endpoint)
-                .post(requestBodyObj)
-                .addHeader("Content-Type", "application/json")
-                .addHeader("Authorization", "Bearer $apiKey")
-                // For Claude may need different header, but v7 focuses on OpenAI-compatible
-                .build()
-
-            val response = client.newCall(request).execute()
-            val responseBody = response.body?.string() ?: ""
-
-            if (!response.isSuccessful) {
-                return@withContext "API error (${response.code}): ${responseBody.take(200)}"
-            }
-
-            val chatResp = json.decodeFromString(ChatResponse.serializer(), responseBody)
-            return@withContext chatResp.choices?.firstOrNull()?.message?.content 
-                ?: chatResp.error?.get("message") 
-                ?: "Spark Baby is thinking... but got no clear reply."
-        } catch (e: Exception) {
-            return@withContext "Connection issue: ${e.message?.take(100) ?: "unknown error"}. Check your key and internet."
+        return when (provider) {
+            Provider.OPENAI -> callOpenAI(key, prompt, systemPrompt)
+            Provider.GROK -> callGrok(key, prompt, systemPrompt) // xAI endpoint similar
+            else -> "${provider.name} integration coming in v8. For now, try OpenAI or Grok."
         }
     }
+
+    private fun callOpenAI(key: String, prompt: String, system: String): String {
+        val body = """
+        {
+          "model": "gpt-4o-mini",
+          "messages": [
+            {"role": "system", "content": "$system"},
+            {"role": "user", "content": "$prompt"}
+          ],
+          "max_tokens": 150
+        }
+        """.trimIndent()
+
+        val request = Request.Builder()
+            .url("https://api.openai.com/v1/chat/completions")
+            .addHeader("Authorization", "Bearer $key")
+            .addHeader("Content-Type", "application/json")
+            .post(body.toRequestBody("application/json".toMediaType()))
+            .build()
+
+        return try {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return "OpenAI error: ${response.code}"
+                val respBody = response.body?.string() ?: return "Empty response"
+                // Simple parse for content (in production use proper json)
+                val content = Regex("\"content\":\"(.*?)\"").find(respBody)?.groupValues?.get(1) ?: "Spark Baby couldn't parse the reply."
+                content.replace("\\n", "\n").take(300)
+            }
+        } catch (e: Exception) {
+            "Network error talking to OpenAI: ${e.message}"
+        }
+    }
+
+    private fun callGrok(key: String, prompt: String, system: String): String {
+        // xAI Grok API (similar OpenAI compatible)
+        val body = """
+        {
+          "model": "grok-2-latest",
+          "messages": [
+            {"role": "system", "content": "$system"},
+            {"role": "user", "content": "$prompt"}
+          ],
+          "max_tokens": 150
+        }
+        """.trimIndent()
+
+        val request = Request.Builder()
+            .url("https://api.x.ai/v1/chat/completions")
+            .addHeader("Authorization", "Bearer $key")
+            .addHeader("Content-Type", "application/json")
+            .post(body.toRequestBody("application/json".toMediaType()))
+            .build()
+
+        return try {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return "Grok error: ${response.code}"
+                val respBody = response.body?.string() ?: return "Empty response"
+                val content = Regex("\"content\":\"(.*?)\"").find(respBody)?.groupValues?.get(1) ?: "Spark Baby is thinking..."
+                content.replace("\\n", "\n").take(300)
+            }
+        } catch (e: Exception) {
+            "Network error talking to Grok: ${e.message}"
+        }
+    }
+
+    // Gemini and Claude can be added similarly in v8
 }
