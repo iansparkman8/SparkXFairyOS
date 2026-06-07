@@ -21,6 +21,7 @@ import androidx.core.app.NotificationCompat
 import com.sparkx.fairyos.R
 import com.sparkx.fairyos.domain.mood.SparkMood
 import kotlin.math.abs
+import kotlin.math.sqrt
 
 class SparkOverlayService : Service() {
 
@@ -35,12 +36,24 @@ class SparkOverlayService : Service() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var wanderRunnable: Runnable? = null
     private var longPressRunnable: Runnable? = null
+
+    // Touch & drag state
     private var downRawX = 0f
     private var downRawY = 0f
     private var startX = 0
     private var startY = 0
     private var moved = false
     private var longPressed = false
+    private var isUserDragging = false
+    private var lastMoveRawX = 0f
+    private var lastMoveRawY = 0f
+    private var lastMoveTime = 0L
+
+    // Smooth free-roam state
+    private var roamTargetX = 0f
+    private var roamTargetY = 0f
+    private var roamVx = 0f
+    private var roamVy = 0f
 
     override fun onCreate() {
         super.onCreate()
@@ -90,12 +103,21 @@ class SparkOverlayService : Service() {
                     startY = p.y
                     moved = false
                     longPressed = false
+                    isUserDragging = true
+                    lastMoveRawX = event.rawX
+                    lastMoveRawY = event.rawY
+                    lastMoveTime = System.currentTimeMillis()
+
+                    stopWanderingTickOnly()
+                    bubbleView?.setUserTouchActive(true)
 
                     longPressRunnable?.let { mainHandler.removeCallbacks(it) }
                     longPressRunnable = Runnable {
                         longPressed = true
                         moved = true
                         isFreeRoam = !isFreeRoam
+                        bubbleView?.setFreeRoamActive(isFreeRoam)
+
                         Toast.makeText(
                             this,
                             if (isFreeRoam) "Free-roam mode enabled" else "Free-roam disabled",
@@ -103,10 +125,15 @@ class SparkOverlayService : Service() {
                         ).show()
 
                         if (isFreeRoam) {
+                            chooseNewRoamTarget()
                             startWandering()
                         } else {
                             stopWandering()
                         }
+
+                        // Refresh notification
+                        val nm = getSystemService(NotificationManager::class.java)
+                        nm.notify(1, createNotification())
                     }
                     mainHandler.postDelayed(longPressRunnable!!, 550L)
                     true
@@ -124,6 +151,18 @@ class SparkOverlayService : Service() {
                         p.x = (startX + dx.toInt()).coerceIn(0, display.widthPixels - p.width)
                         p.y = (startY + dy.toInt()).coerceIn(0, display.heightPixels - p.height)
 
+                        // Calculate velocity for motion illusion
+                        val now = System.currentTimeMillis()
+                        val dt = (now - lastMoveTime).coerceAtLeast(1).toFloat()
+                        val vx = ((event.rawX - lastMoveRawX) / dt * 16f).coerceIn(-40f, 40f)
+                        val vy = ((event.rawY - lastMoveRawY) / dt * 16f).coerceIn(-40f, 40f)
+
+                        bubbleView?.updateMotion(vx, vy)
+
+                        lastMoveRawX = event.rawX
+                        lastMoveRawY = event.rawY
+                        lastMoveTime = now
+
                         try {
                             windowManager?.updateViewLayout(view, p)
                         } catch (_: Exception) {
@@ -134,11 +173,18 @@ class SparkOverlayService : Service() {
 
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     longPressRunnable?.let { mainHandler.removeCallbacks(it) }
+                    isUserDragging = false
+                    bubbleView?.setUserTouchActive(false)
+                    bubbleView?.updateMotion(0f, 0f)
 
                     if (!moved && !longPressed) {
                         openHome()
                     } else if (!isFreeRoam) {
                         snapToEdge()
+                    } else {
+                        // Resume smooth roaming after user drag
+                        chooseNewRoamTarget()
+                        startWandering()
                     }
 
                     true
@@ -237,42 +283,88 @@ class SparkOverlayService : Service() {
             .build()
     }
 
+    // ==================== SMOOTH FREE-ROAM ====================
+
     private fun startWandering() {
         stopWandering()
 
+        chooseNewRoamTarget()
+
         wanderRunnable = object : Runnable {
             override fun run() {
-                if (!isFreeRoam || bubbleView == null || params == null) return
+                if (!isFreeRoam || bubbleView == null || params == null || isUserDragging) {
+                    mainHandler.postDelayed(this, 16L)
+                    return
+                }
 
                 val p = params ?: return
                 val view = bubbleView ?: return
                 val display = resources.displayMetrics
 
-                val dx = (-36..36).random()
-                val dy = (-24..24).random()
+                val safeLeft = 16
+                val safeTop = 96
+                val safeRight = display.widthPixels - p.width - 16
+                val safeBottom = display.heightPixels - p.height - 180
 
-                p.x = (p.x + dx).coerceIn(0, display.widthPixels - p.width)
-                p.y = (p.y + dy).coerceIn(80, display.heightPixels - p.height - 80)
+                val dx = roamTargetX - p.x
+                val dy = roamTargetY - p.y
+                val dist = sqrt(dx * dx + dy * dy)
 
-                if ((0..5).random() == 0) {
-                    p.x = if (p.x < display.widthPixels / 2) 8 else display.widthPixels - p.width - 8
+                if (dist < 18f) {
+                    chooseNewRoamTarget()
+                } else {
+                    val speed = 0.035f
+                    roamVx = (roamVx * 0.86f + dx * speed).coerceIn(-8f, 8f)
+                    roamVy = (roamVy * 0.86f + dy * speed).coerceIn(-6f, 6f)
+
+                    p.x = (p.x + roamVx.toInt()).coerceIn(safeLeft, safeRight)
+                    p.y = (p.y + roamVy.toInt()).coerceIn(safeTop, safeBottom)
+
+                    bubbleView?.updateMotion(roamVx * 3f, roamVy * 3f)
+
+                    try {
+                        windowManager?.updateViewLayout(view, p)
+                    } catch (_: Exception) {
+                    }
                 }
 
-                try {
-                    windowManager?.updateViewLayout(view, p)
-                } catch (_: Exception) {
-                }
-
-                mainHandler.postDelayed(this, 1200L)
+                mainHandler.postDelayed(this, 16L)
             }
         }
 
-        mainHandler.postDelayed(wanderRunnable!!, 900L)
+        mainHandler.post(wanderRunnable!!)
     }
 
     private fun stopWandering() {
         wanderRunnable?.let { mainHandler.removeCallbacks(it) }
         wanderRunnable = null
+        roamVx = 0f
+        roamVy = 0f
+        bubbleView?.updateMotion(0f, 0f)
+    }
+
+    private fun stopWanderingTickOnly() {
+        wanderRunnable?.let { mainHandler.removeCallbacks(it) }
+        wanderRunnable = null
+    }
+
+    private fun chooseNewRoamTarget() {
+        val p = params ?: return
+        val display = resources.displayMetrics
+
+        val safeLeft = 24
+        val safeTop = 110
+        val safeRight = (display.widthPixels - p.width - 24).coerceAtLeast(safeLeft)
+        val safeBottom = (display.heightPixels - p.height - 190).coerceAtLeast(safeTop)
+
+        val centerBiasX = display.widthPixels * 0.5f
+        val centerBiasY = display.heightPixels * 0.42f
+
+        val randomX = (safeLeft..safeRight).random().toFloat()
+        val randomY = (safeTop..safeBottom).random().toFloat()
+
+        roamTargetX = (randomX * 0.72f + centerBiasX * 0.28f).coerceIn(safeLeft.toFloat(), safeRight.toFloat())
+        roamTargetY = (randomY * 0.72f + centerBiasY * 0.28f).coerceIn(safeTop.toFloat(), safeBottom.toFloat())
     }
 
     override fun onDestroy() {
