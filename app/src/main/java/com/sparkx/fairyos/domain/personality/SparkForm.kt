@@ -1,10 +1,10 @@
 package com.sparkx.fairyos.domain.personality
 
-enum class SparkForm {
-    DEFAULT_FAIRY,
-    CYBER_FAIRY,
-    STAR_FAIRY,
-    DREAM_FAIRY,
-    SHADOW_FAIRY,
-    ROYAL_FAIRY
+enum class SparkForm(val displayName: String) {
+    DEFAULT_FAIRY("Baby Fairy"),
+    CYBER_FAIRY("Cyber Fairy"),
+    STAR_FAIRY("Star Fairy"),
+    DREAM_FAIRY("Dream Fairy"),
+    SHADOW_FAIRY("Shadow Fairy"),
+    ROYAL_FAIRY("Royal Fairy")
 }
