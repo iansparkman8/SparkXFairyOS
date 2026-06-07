@@ -97,6 +97,7 @@ class MainActivity : ComponentActivity() {
                 SparkXApp(
                     currentMood = currentMood,
                     isSpeaking = isSpeaking,
+                    isListening = isListening,
                     isOwnerMode = isOwnerMode,
                     overlayVisible = overlayVisible,
                     commandInput = commandInput,
@@ -204,6 +205,7 @@ class MainActivity : ComponentActivity() {
 fun SparkXApp(
     currentMood: SparkMood,
     isSpeaking: Boolean,
+    isListening: Boolean,
     isOwnerMode: Boolean,
     overlayVisible: Boolean,
     commandInput: String,
