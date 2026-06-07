@@ -129,21 +129,13 @@ class SparkOverlayService : Service() {
                     longPressRunnable = Runnable {
                         longPressed = true
                         moved = true
-                        isFreeRoam = !isFreeRoam
-                        bubbleView?.setFreeRoamActive(isFreeRoam)
+                        toggleFreeRoam()
 
                         Toast.makeText(
                             this,
                             if (isFreeRoam) "Free-roam mode enabled" else "Free-roam disabled",
                             Toast.LENGTH_SHORT
                         ).show()
-
-                        if (isFreeRoam) {
-                            chooseNewRoamTarget()
-                            startWandering()
-                        } else {
-                            stopWandering()
-                        }
 
                         val nm = getSystemService(NotificationManager::class.java)
                         nm.notify(1, createNotification())
@@ -264,6 +256,12 @@ class SparkOverlayService : Service() {
                 isSpeaking = intent.getBooleanExtra("speaking", false)
                 bubbleView?.updateState(currentMood, isSpeaking)
             }
+            "TOGGLE_FREE_ROAM" -> {
+                toggleFreeRoam()
+            }
+            "SET_FREE_ROAM" -> {
+                setFreeRoamEnabled(intent.getBooleanExtra("enabled", false))
+            }
         }
 
         if (action == "START_OVERLAY" || action == null) {
@@ -286,15 +284,56 @@ class SparkOverlayService : Service() {
             PendingIntent.FLAG_IMMUTABLE
         )
 
+        val roamIntent = PendingIntent.getService(
+            this, 2,
+            Intent(this, SparkOverlayService::class.java).apply {
+                action = "TOGGLE_FREE_ROAM"
+            },
+            PendingIntent.FLAG_IMMUTABLE
+        )
+
         return NotificationCompat.Builder(this, "spark_fairy_overlay")
             .setContentTitle("Spark Baby is with you")
-            .setContentText(if (isFreeRoam) "Free-roam mode active • Long-press bubble to stop" else "Tap bubble to open SparkX Home")
+            .setContentText(
+                if (isFreeRoam) {
+                    "Free-roam mode active"
+                } else {
+                    "Tap bubble to open SparkX Home"
+                }
+            )
             .setSmallIcon(android.R.drawable.star_on)
             .setOngoing(true)
             .addAction(0, "Open", openIntent)
+            .addAction(0, if (isFreeRoam) "Stop Roam" else "Free Roam", roamIntent)
             .addAction(0, "Hide", hideIntent)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
+    }
+
+    // ==================== FREE-ROAM HELPERS ====================
+
+    private fun toggleFreeRoam() {
+        setFreeRoamEnabled(!isFreeRoam)
+    }
+
+    private fun setFreeRoamEnabled(enabled: Boolean) {
+        isFreeRoam = enabled
+        bubbleView?.setFreeRoamActive(isFreeRoam)
+
+        if (isFreeRoam) {
+            params?.let {
+                roamFloatX = it.x.toFloat()
+                roamFloatY = it.y.toFloat()
+            }
+            chooseNewRoamTarget()
+            startWandering()
+        } else {
+            stopWandering()
+            snapToEdge()
+        }
+
+        val nm = getSystemService(NotificationManager::class.java)
+        nm.notify(1, createNotification())
     }
 
     // ==================== SMOOTH FLOAT-BASED FREE-ROAM ====================
@@ -335,18 +374,18 @@ class SparkOverlayService : Service() {
                         chooseNewRoamTarget()
                         roamStuckFrames = 0
                     } else {
-                        val accel = 0.018f
-                        val damping = 0.91f
+                        val accel = 0.026f
+                        val damping = 0.90f
 
-                        roamVx = (roamVx * damping + dx * accel).coerceIn(-5.5f, 5.5f)
-                        roamVy = (roamVy * damping + dy * accel).coerceIn(-4.25f, 4.25f)
+                        roamVx = (roamVx * damping + dx * accel).coerceIn(-8.0f, 8.0f)
+                        roamVy = (roamVy * damping + dy * accel).coerceIn(-6.5f, 6.5f)
 
                         // Minimum visual movement floor so it cannot silently round to zero
-                        if (abs(roamVx) < 0.35f && abs(dx) > 24f) {
-                            roamVx = if (dx > 0f) 0.35f else -0.35f
+                        if (abs(roamVx) < 0.65f && abs(dx) > 24f) {
+                            roamVx = if (dx > 0f) 0.65f else -0.65f
                         }
-                        if (abs(roamVy) < 0.28f && abs(dy) > 24f) {
-                            roamVy = if (dy > 0f) 0.28f else -0.28f
+                        if (abs(roamVy) < 0.50f && abs(dy) > 24f) {
+                            roamVy = if (dy > 0f) 0.50f else -0.50f
                         }
 
                         roamFloatX = (roamFloatX + roamVx).coerceIn(safeLeft, safeRight)
