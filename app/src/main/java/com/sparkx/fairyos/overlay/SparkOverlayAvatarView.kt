@@ -8,7 +8,6 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RadialGradient
 import android.graphics.Shader
-import android.graphics.drawable.GradientDrawable
 import android.os.SystemClock
 import android.view.Gravity
 import android.view.View
@@ -22,16 +21,16 @@ import kotlin.math.sin
 import kotlin.random.Random
 
 /**
- * Asset-backed overlay avatar renderer.
+ * Premium asset-backed overlay avatar renderer.
  *
- * This replaces the legacy procedural Canvas fairy.
- * Real game-quality depends on transparent WebP/PNG/Rive assets.
+ * This displays Spark Baby from transparent PNG/WebP assets instead of
+ * drawing a weak procedural Canvas mascot.
  */
 class SparkOverlayAvatarView(context: Context) : FrameLayout(context) {
 
-    private val particleView = SparkOverlayParticleView(context)
     private val glowView = SparkOverlayGlowView(context)
     private val fairyImage = ImageView(context)
+    private val particleView = SparkOverlayParticleView(context)
 
     private var currentMood: SparkMood = SparkMood.IDLE
     private var isSpeaking: Boolean = false
@@ -41,6 +40,7 @@ class SparkOverlayAvatarView(context: Context) : FrameLayout(context) {
         clipChildren = false
         clipToPadding = false
         setWillNotDraw(false)
+
         isClickable = true
         isLongClickable = true
 
@@ -63,7 +63,7 @@ class SparkOverlayAvatarView(context: Context) : FrameLayout(context) {
 
         fairyImage.scaleType = ImageView.ScaleType.FIT_CENTER
         fairyImage.adjustViewBounds = true
-        fairyImage.setPadding(4, 4, 4, 4)
+        fairyImage.setPadding(2, 2, 2, 2)
 
         applyMoodAsset()
         startIdleFloat()
@@ -96,18 +96,20 @@ class SparkOverlayAvatarView(context: Context) : FrameLayout(context) {
     fun updateForm(form: SparkForm) {
         currentForm = form
         applyMoodAsset()
+        pulseSmall()
     }
 
     fun updateMotion(vx: Float, vy: Float) {
         particleView.updateMotion(vx, vy)
 
-        fairyImage.rotation = (vx / 40f * 6f).coerceIn(-7f, 7f)
+        fairyImage.rotation = (vx / 40f * 5f).coerceIn(-7f, 7f)
         fairyImage.translationX = (vx / 40f * 5f).coerceIn(-6f, 6f)
+        fairyImage.translationY = (vy / 40f * 3f).coerceIn(-4f, 4f)
     }
 
     fun setFreeRoamActive(active: Boolean) {
-        particleView.setFreeRoamActive(active)
         glowView.setFreeRoamActive(active)
+        particleView.setFreeRoamActive(active)
     }
 
     fun setUserTouchActive(active: Boolean) {
@@ -122,7 +124,7 @@ class SparkOverlayAvatarView(context: Context) : FrameLayout(context) {
 
     private fun applyMoodAsset() {
         val assetName = when {
-            isSpeaking || currentMood == SparkMood.SPEAKING -> "spark_fairy_speaking"
+            isSpeaking -> "spark_fairy_speaking"
             currentMood == SparkMood.HAPPY -> "spark_fairy_happy"
             currentMood == SparkMood.THINKING -> "spark_fairy_thinking"
             currentMood == SparkMood.LISTENING -> "spark_fairy_listening"
@@ -135,26 +137,9 @@ class SparkOverlayAvatarView(context: Context) : FrameLayout(context) {
 
         if (resId != 0) {
             fairyImage.setImageResource(resId)
-            fairyImage.background = null
         } else {
-            // Temporary fallback so the APK builds before real art assets exist.
-            // Replace with transparent WebP/PNG assets ASAP.
-            fairyImage.setImageDrawable(null)
-            fairyImage.background = placeholderDrawable()
-        }
-    }
-
-    private fun placeholderDrawable(): GradientDrawable {
-        return GradientDrawable(
-            GradientDrawable.Orientation.TOP_BOTTOM,
-            intArrayOf(
-                Color.argb(210, 245, 230, 255),
-                Color.argb(230, 160, 95, 255),
-                Color.argb(220, 40, 20, 85)
-            )
-        ).apply {
-            shape = GradientDrawable.OVAL
-            setStroke(2, Color.argb(160, 220, 245, 255))
+            // Compile-safe fallback. Real visual quality comes from drawable-nodpi assets.
+            fairyImage.setImageResource(android.R.drawable.star_big_on)
         }
     }
 
@@ -181,6 +166,7 @@ class SparkOverlayAvatarView(context: Context) : FrameLayout(context) {
     private fun pulseSmall() {
         val sx = ObjectAnimator.ofFloat(fairyImage, View.SCALE_X, fairyImage.scaleX, 1.06f, 1f)
         val sy = ObjectAnimator.ofFloat(fairyImage, View.SCALE_Y, fairyImage.scaleY, 1.06f, 1f)
+
         AnimatorSet().apply {
             playTogether(sx, sy)
             duration = 260L
@@ -192,6 +178,7 @@ class SparkOverlayAvatarView(context: Context) : FrameLayout(context) {
     private fun pulseBig() {
         val sx = ObjectAnimator.ofFloat(fairyImage, View.SCALE_X, fairyImage.scaleX, 1.16f, 1f)
         val sy = ObjectAnimator.ofFloat(fairyImage, View.SCALE_Y, fairyImage.scaleY, 1.16f, 1f)
+
         AnimatorSet().apply {
             playTogether(sx, sy)
             duration = 340L
@@ -202,11 +189,13 @@ class SparkOverlayAvatarView(context: Context) : FrameLayout(context) {
 }
 
 private class SparkOverlayGlowView(context: Context) : View(context) {
+
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+
     private var mood: SparkMood = SparkMood.IDLE
-    private var speaking = false
-    private var freeRoam = false
-    private var touched = false
+    private var speaking: Boolean = false
+    private var freeRoam: Boolean = false
+    private var touched: Boolean = false
 
     fun updateMood(mood: SparkMood, speaking: Boolean) {
         this.mood = mood
@@ -227,24 +216,25 @@ private class SparkOverlayGlowView(context: Context) : View(context) {
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 
-        val t = SystemClock.uptimeMillis() / 1000f
+        val time = SystemClock.uptimeMillis() / 1000f
         val cx = width / 2f
         val cy = height / 2f
 
-        val base = when (mood) {
-            SparkMood.HAPPY -> Color.rgb(255, 110, 210)
-            SparkMood.THINKING -> Color.rgb(160, 125, 255)
-            SparkMood.LISTENING -> Color.rgb(0, 255, 190)
-            SparkMood.ALERT -> Color.rgb(255, 80, 110)
-            SparkMood.SLEEPY -> Color.rgb(115, 120, 220)
-            SparkMood.SPEAKING -> Color.rgb(255, 110, 210)
+        val base = when {
+            speaking -> Color.rgb(255, 120, 220)
+            mood == SparkMood.HAPPY -> Color.rgb(255, 140, 235)
+            mood == SparkMood.THINKING -> Color.rgb(170, 130, 255)
+            mood == SparkMood.LISTENING -> Color.rgb(0, 255, 215)
+            mood == SparkMood.ALERT -> Color.rgb(255, 90, 120)
+            mood == SparkMood.SLEEPY -> Color.rgb(150, 155, 255)
             else -> Color.rgb(0, 229, 255)
         }
 
-        val pulse = 1f + sin(t * if (speaking) 6f else 2f) * 0.05f
+        val pulse = 1f + sin(time * if (speaking) 6f else 2f) * 0.055f
+
         val alpha = when {
             touched -> 120
-            freeRoam -> 100
+            freeRoam -> 105
             speaking -> 115
             else -> 72
         }
@@ -252,17 +242,17 @@ private class SparkOverlayGlowView(context: Context) : View(context) {
         paint.shader = RadialGradient(
             cx,
             cy,
-            width * 0.46f * pulse,
+            width * 0.47f * pulse,
             intArrayOf(
                 Color.argb(alpha, Color.red(base), Color.green(base), Color.blue(base)),
-                Color.argb(alpha / 2, 150, 95, 255),
+                Color.argb(alpha / 2, 160, 95, 255),
                 Color.TRANSPARENT
             ),
-            floatArrayOf(0f, 0.52f, 1f),
+            floatArrayOf(0f, 0.55f, 1f),
             Shader.TileMode.CLAMP
         )
 
-        canvas.drawCircle(cx, cy, width * 0.46f * pulse, paint)
+        canvas.drawCircle(cx, cy, width * 0.47f * pulse, paint)
         paint.shader = null
 
         postInvalidateOnAnimation()
@@ -270,14 +260,15 @@ private class SparkOverlayGlowView(context: Context) : View(context) {
 }
 
 private class SparkOverlayParticleView(context: Context) : View(context) {
+
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
 
     private var mood: SparkMood = SparkMood.IDLE
-    private var speaking = false
-    private var freeRoam = false
-    private var motionVx = 0f
-    private var motionVy = 0f
-    private var burstAt = 0L
+    private var speaking: Boolean = false
+    private var freeRoam: Boolean = false
+    private var motionVx: Float = 0f
+    private var motionVy: Float = 0f
+    private var burstAt: Long = 0L
 
     private data class ParticleSeed(
         val angle: Float,
@@ -286,12 +277,12 @@ private class SparkOverlayParticleView(context: Context) : View(context) {
         val size: Float
     )
 
-    private val seeds = List(28) {
+    private val seeds = List(32) {
         ParticleSeed(
             angle = Random.nextFloat() * 6.283f,
-            radius = 0.18f + Random.nextFloat() * 0.38f,
-            speed = 0.5f + Random.nextFloat() * 1.8f,
-            size = 1.0f + Random.nextFloat() * 2.4f
+            radius = 0.14f + Random.nextFloat() * 0.42f,
+            speed = 0.45f + Random.nextFloat() * 1.9f,
+            size = 1.0f + Random.nextFloat() * 2.8f
         )
     }
 
@@ -320,37 +311,46 @@ private class SparkOverlayParticleView(context: Context) : View(context) {
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 
-        val t = SystemClock.uptimeMillis() / 1000f
+        val time = SystemClock.uptimeMillis() / 1000f
         val cx = width / 2f
         val cy = height / 2f
 
-        val color = when (mood) {
-            SparkMood.ALERT -> Color.rgb(255, 120, 120)
-            SparkMood.LISTENING -> Color.rgb(0, 255, 190)
-            SparkMood.SLEEPY -> Color.rgb(180, 180, 255)
-            SparkMood.HAPPY -> Color.rgb(255, 170, 235)
-            else -> Color.rgb(150, 235, 255)
+        val color = when {
+            speaking -> Color.rgb(255, 145, 230)
+            mood == SparkMood.ALERT -> Color.rgb(255, 120, 120)
+            mood == SparkMood.LISTENING -> Color.rgb(0, 255, 210)
+            mood == SparkMood.SLEEPY -> Color.rgb(180, 180, 255)
+            mood == SparkMood.HAPPY -> Color.rgb(255, 185, 245)
+            else -> Color.rgb(155, 235, 255)
         }
 
         val count = when {
-            speaking -> 28
-            freeRoam -> 24
-            else -> 16
+            speaking -> 30
+            freeRoam -> 26
+            else -> 18
         }
 
         for (i in 0 until count.coerceAtMost(seeds.size)) {
             val seed = seeds[i]
-            val a = seed.angle + t * seed.speed
-            val r = width * seed.radius
+            val angle = seed.angle + time * seed.speed
+            val radius = width * seed.radius
+
             val driftX = -motionVx * 0.22f
             val driftY = -motionVy * 0.12f
 
-            val x = cx + cos(a) * r + driftX
-            val y = cy + sin(a * 0.86f) * r + driftY
-            val twinkle = ((sin(t * 5f + i) + 1f) * 0.5f)
+            val x = cx + cos(angle) * radius + driftX
+            val y = cy + sin(angle * 0.86f) * radius + driftY
+
+            val twinkle = ((sin(time * 5f + i) + 1f) * 0.5f)
             val alpha = (55 + twinkle * 170).toInt()
 
-            paint.color = Color.argb(alpha, Color.red(color), Color.green(color), Color.blue(color))
+            paint.color = Color.argb(
+                alpha,
+                Color.red(color),
+                Color.green(color),
+                Color.blue(color)
+            )
+
             canvas.drawCircle(x, y, seed.size * twinkle + 0.8f, paint)
         }
 
