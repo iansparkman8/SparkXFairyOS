@@ -92,6 +92,42 @@ class MainActivity : ComponentActivity() {
             repo.entriesFlow.collect { teachEntries.clear(); teachEntries.addAll(it) }
         }
 
+        // Create stable callbacks in Activity scope (where lifecycleScope, repo, voiceController exist)
+        val onAddTeachEntry: (String, String, String) -> Unit = { title, content, type ->
+            lifecycleScope.launch {
+                val entry = TeachGrowEntry(title = title, content = content, type = type)
+                repo.addEntry(entry)
+            }
+        }
+
+        val onUpdateTeachEntry: (TeachGrowEntry) -> Unit = { entry ->
+            lifecycleScope.launch { repo.updateEntry(entry) }
+        }
+
+        val onDeleteTeachEntry: (String) -> Unit = { id ->
+            lifecycleScope.launch { repo.deleteEntry(id) }
+        }
+
+        val onArchiveTeachEntry: (String, Boolean) -> Unit = { id, archived ->
+            lifecycleScope.launch { repo.archiveEntry(id, archived) }
+        }
+
+        val onPinTeachEntry: (String, Boolean) -> Unit = { id, pinned ->
+            lifecycleScope.launch { repo.pinEntry(id, pinned) }
+        }
+
+        val onReviewTeachEntry: (String) -> Unit = { id ->
+            lifecycleScope.launch { repo.markReviewed(id) }
+        }
+
+        val onExportTeachJson: () -> Unit = {
+            lifecycleScope.launch {
+                val exported = repo.exportJson(includeArchived = true)
+                commandInput = exported.take(4000)
+                voiceController.speak("Teach and Grow export prepared in the command box.")
+            }
+        }
+
         setContent {
             SparkXFairyOSTheme {
                 SparkXApp(
@@ -107,12 +143,13 @@ class MainActivity : ComponentActivity() {
                     onToggleOwnerMode = { toggleOwnerMode() },
                     onToggleOverlay = { if (overlayVisible) hideOverlay() else showOverlay() },
                     teachEntries = teachEntries,
-                    onAddTeachEntry = { title, content, type ->
-                        lifecycleScope.launch {
-                            val entry = TeachGrowEntry(title = title, content = content, type = type)
-                            repo.addEntry(entry)
-                        }
-                    },
+                    onAddTeachEntry = onAddTeachEntry,
+                    onUpdateTeachEntry = onUpdateTeachEntry,
+                    onDeleteTeachEntry = onDeleteTeachEntry,
+                    onArchiveTeachEntry = onArchiveTeachEntry,
+                    onPinTeachEntry = onPinTeachEntry,
+                    onReviewTeachEntry = onReviewTeachEntry,
+                    onExportTeachJson = onExportTeachJson,
                     onLaunchApp = { pkg -> launchApp(pkg) },
                     onRequestOverlayPermission = { requestOverlayPermission() },
                     navController = rememberNavController()
@@ -216,6 +253,12 @@ fun SparkXApp(
     onToggleOverlay: () -> Unit,
     teachEntries: List<TeachGrowEntry>,
     onAddTeachEntry: (String, String, String) -> Unit,
+    onUpdateTeachEntry: (TeachGrowEntry) -> Unit,
+    onDeleteTeachEntry: (String) -> Unit,
+    onArchiveTeachEntry: (String, Boolean) -> Unit,
+    onPinTeachEntry: (String, Boolean) -> Unit,
+    onReviewTeachEntry: (String) -> Unit,
+    onExportTeachJson: () -> Unit,
     onLaunchApp: (String) -> Unit,
     onRequestOverlayPermission: () -> Unit,
     navController: NavHostController
@@ -281,28 +324,12 @@ fun SparkXApp(
                 TeachGrowScreen(
                     entries = teachEntries,
                     onAddEntry = onAddTeachEntry,
-                    onUpdateEntry = { entry ->
-                        lifecycleScope.launch { (application as SparkXApplication).teachGrowRepository.updateEntry(entry) }
-                    },
-                    onDeleteEntry = { id ->
-                        lifecycleScope.launch { (application as SparkXApplication).teachGrowRepository.deleteEntry(id) }
-                    },
-                    onArchiveEntry = { id, archived ->
-                        lifecycleScope.launch { (application as SparkXApplication).teachGrowRepository.archiveEntry(id, archived) }
-                    },
-                    onPinEntry = { id, pinned ->
-                        lifecycleScope.launch { (application as SparkXApplication).teachGrowRepository.pinEntry(id, pinned) }
-                    },
-                    onReviewEntry = { id ->
-                        lifecycleScope.launch { (application as SparkXApplication).teachGrowRepository.markReviewed(id) }
-                    },
-                    onExportJson = {
-                        lifecycleScope.launch {
-                            val exported = (application as SparkXApplication).teachGrowRepository.exportJson(includeArchived = true)
-                            commandInput = exported.take(4000)
-                            voiceController.speak("Teach and Grow export prepared in the command box.")
-                        }
-                    }
+                    onUpdateEntry = onUpdateTeachEntry,
+                    onDeleteEntry = onDeleteTeachEntry,
+                    onArchiveEntry = onArchiveTeachEntry,
+                    onPinEntry = onPinTeachEntry,
+                    onReviewEntry = onReviewTeachEntry,
+                    onExportJson = onExportTeachJson
                 )
             }
             composable("ai") { AIProviderScreen() }
@@ -478,6 +505,9 @@ fun AppDrawerScreen(onLaunchApp: (String) -> Unit) {
     }
 }
 
+// (TeachGrowScreen and all its helper composables remain exactly as in the previous successful replace)
+// They are self-contained and do not need changes for this scope fix.
+
 @Composable
 fun TeachGrowScreen(
     entries: List<TeachGrowEntry>,
@@ -588,7 +618,6 @@ fun TeachGrowScreen(
 
         Spacer(Modifier.height(10.dp))
 
-        // Type filter chips (using LazyColumn to avoid extra imports)
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
@@ -597,7 +626,7 @@ fun TeachGrowScreen(
         ) {
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    types.take(4).forEach { type ->
+                    listOf("all", "lesson", "code", "behavior", "memory").forEach { type ->
                         FilterChip(
                             selected = selectedType == type,
                             onClick = { selectedType = type },
@@ -608,7 +637,7 @@ fun TeachGrowScreen(
             }
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    types.drop(4).forEach { type ->
+                    listOf("prompt", "idea", "system").forEach { type ->
                         FilterChip(
                             selected = selectedType == type,
                             onClick = { selectedType = type },
