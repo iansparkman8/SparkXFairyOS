@@ -35,6 +35,14 @@ class SparkOverlayBubbleView(context: Context) : View(context) {
 
     private var currentMood: SparkMood = SparkMood.IDLE
     private var isSpeaking: Boolean = false
+    private var currentForm = com.sparkx.fairyos.domain.personality.SparkForm.DEFAULT_FAIRY
+
+    // Motion & interaction state for v11
+    private var motionVx = 0f
+    private var motionVy = 0f
+    private var isFreeRoamActive = false
+    private var isUserTouchActive = false
+    private var lastTapBurstTime = 0L
 
     private var cx = 0f
     private var cy = 0f
@@ -62,8 +70,40 @@ class SparkOverlayBubbleView(context: Context) : View(context) {
     }
 
     fun updateState(mood: SparkMood, speaking: Boolean) {
+        updateState(mood, speaking, currentForm)
+    }
+
+    fun updateState(mood: SparkMood, speaking: Boolean, form: com.sparkx.fairyos.domain.personality.SparkForm) {
         currentMood = mood
         isSpeaking = speaking
+        currentForm = form
+        postInvalidateOnAnimation()
+    }
+
+    fun updateForm(form: com.sparkx.fairyos.domain.personality.SparkForm) {
+        currentForm = form
+        postInvalidateOnAnimation()
+    }
+
+    // v11 motion & interaction hooks
+    fun updateMotion(vx: Float, vy: Float) {
+        motionVx = vx.coerceIn(-40f, 40f)
+        motionVy = vy.coerceIn(-40f, 40f)
+        postInvalidateOnAnimation()
+    }
+
+    fun setFreeRoamActive(active: Boolean) {
+        isFreeRoamActive = active
+        postInvalidateOnAnimation()
+    }
+
+    fun setUserTouchActive(active: Boolean) {
+        isUserTouchActive = active
+        postInvalidateOnAnimation()
+    }
+
+    fun triggerTapBurst() {
+        lastTapBurstTime = System.currentTimeMillis()
         postInvalidateOnAnimation()
     }
 
@@ -89,11 +129,12 @@ class SparkOverlayBubbleView(context: Context) : View(context) {
 
         val breath = sin(t * 2.1f) * 0.035f
         val speakPulse = if (isSpeaking) 1f + sin(t * 18f) * 0.08f else 1f
-        val bob = sin(t * 1.7f) * 2.4f * unit
-        val bodyCx = cx
+        val bob = sin(t * 1.7f) * 2.4f * unit + motionVy * 0.08f
+        val bodyCx = cx + motionVx * 0.06f
         val bodyCy = cy + bob
 
         drawOuterAura(canvas, palette, t)
+        drawGlassBubble(canvas, palette, t)
         drawOrbitRings(canvas, palette, t)
         drawSparkles(canvas, palette, t)
         drawWings(canvas, bodyCx, bodyCy, palette, t, breath)
@@ -211,6 +252,26 @@ class SparkOverlayBubbleView(context: Context) : View(context) {
         canvas.drawCircle(cx, cy, 34f * unit + cos(t * 1.8f) * 1.2f * unit, stroke)
     }
 
+    private fun drawGlassBubble(canvas: Canvas, p: MoodPalette, t: Float) {
+        val pulse = 1f + sin(t * 1.8f) * 0.025f
+        val radius = 52f * unit * pulse
+
+        // Subtle glass rim
+        stroke.style = Paint.Style.STROKE
+        stroke.strokeWidth = 2.2f * unit
+        stroke.color = withAlpha(Color.WHITE, if (isFreeRoamActive) 55 else 35)
+        canvas.drawCircle(cx, cy, radius, stroke)
+
+        // Soft inner refraction highlight
+        stroke.strokeWidth = 1.1f * unit
+        stroke.color = withAlpha(p.aura, if (isSpeaking || isFreeRoamActive) 70 else 40)
+        canvas.drawArc(
+            cx - radius * 0.6f, cy - radius * 0.6f,
+            cx + radius * 0.6f, cy + radius * 0.6f,
+            200f, 80f, false, stroke
+        )
+    }
+
     private fun drawOrbitRings(canvas: Canvas, p: MoodPalette, t: Float) {
         canvas.save()
         canvas.rotate(t * 18f, cx, cy)
@@ -232,13 +293,13 @@ class SparkOverlayBubbleView(context: Context) : View(context) {
     private fun drawSparkles(canvas: Canvas, p: MoodPalette, t: Float) {
         paint.style = Paint.Style.FILL
 
-        val count = if (isSpeaking || currentMood == SparkMood.THINKING) 18 else 11
+        val count = if (isSpeaking || currentMood == SparkMood.THINKING || isFreeRoamActive) 22 else 13
         for (i in 0 until count) {
             val base = i * 2.399963f
-            val spin = t * (0.55f + i * 0.013f)
+            val spin = t * (0.55f + i * 0.013f) + motionVx * 0.008f
             val radius = (26f + (i % 5) * 4.1f + sin(t * 1.3f + i) * 2.5f) * unit
-            val x = cx + cos(base + spin) * radius
-            val y = cy + sin(base + spin * 0.75f) * radius * 0.82f
+            val x = cx + cos(base + spin) * radius + motionVx * 0.15f
+            val y = cy + sin(base + spin * 0.75f) * radius * 0.82f + motionVy * 0.12f
             val twinkle = ((sin(t * 5.5f + i) + 1f) * 0.5f)
             val alpha = (70 + twinkle * 145).toInt()
             val size = (0.75f + twinkle * 1.6f) * unit
@@ -259,9 +320,10 @@ class SparkOverlayBubbleView(context: Context) : View(context) {
     private fun drawWings(canvas: Canvas, x: Float, y: Float, p: MoodPalette, t: Float, breath: Float) {
         val flap = sin(t * if (isSpeaking) 11f else 4.2f) * (if (isSpeaking) 5.5f else 3.2f) * unit
         val sleepyDrop = if (currentMood == SparkMood.SLEEPY) 4f * unit else 0f
+        val motionLag = motionVx * 0.12f
 
-        drawWingSide(canvas, x, y, p, left = true, flap = flap, sleepyDrop = sleepyDrop, breath = breath)
-        drawWingSide(canvas, x, y, p, left = false, flap = flap, sleepyDrop = sleepyDrop, breath = breath)
+        drawWingSide(canvas, x + motionLag * 0.3f, y, p, left = true, flap = flap + motionLag * 0.4f, sleepyDrop = sleepyDrop, breath = breath)
+        drawWingSide(canvas, x - motionLag * 0.3f, y, p, left = false, flap = flap - motionLag * 0.4f, sleepyDrop = sleepyDrop, breath = breath)
     }
 
     private fun drawWingSide(
@@ -405,6 +467,7 @@ class SparkOverlayBubbleView(context: Context) : View(context) {
 
     private fun drawArms(canvas: Canvas, x: Float, y: Float, p: MoodPalette, t: Float) {
         val wave = if (isSpeaking || currentMood == SparkMood.HAPPY) sin(t * 8f) * 2.7f * unit else 0f
+        val motionWave = motionVx * 0.25f
 
         stroke.style = Paint.Style.STROKE
         stroke.strokeWidth = 2.1f * unit
@@ -412,18 +475,18 @@ class SparkOverlayBubbleView(context: Context) : View(context) {
 
         path.reset()
         path.moveTo(x - 10f * unit, y + 5f * unit)
-        path.cubicTo(x - 19f * unit, y + 10f * unit, x - 23f * unit, y + 18f * unit, x - 27f * unit, y + 22f * unit + wave)
+        path.cubicTo(x - 19f * unit, y + 10f * unit, x - 23f * unit, y + 18f * unit, x - 27f * unit, y + 22f * unit + wave + motionWave)
         canvas.drawPath(path, stroke)
 
         path.reset()
         path.moveTo(x + 10f * unit, y + 5f * unit)
-        path.cubicTo(x + 19f * unit, y + 10f * unit, x + 23f * unit, y + 18f * unit, x + 27f * unit, y + 22f * unit - wave)
+        path.cubicTo(x + 19f * unit, y + 10f * unit, x + 23f * unit, y + 18f * unit, x + 27f * unit, y + 22f * unit - wave - motionWave)
         canvas.drawPath(path, stroke)
 
         paint.style = Paint.Style.FILL
         paint.color = Color.argb(220, 255, 225, 205)
-        canvas.drawCircle(x - 27f * unit, y + 22f * unit + wave, 1.8f * unit, paint)
-        canvas.drawCircle(x + 27f * unit, y + 22f * unit - wave, 1.8f * unit, paint)
+        canvas.drawCircle(x - 27f * unit, y + 22f * unit + wave + motionWave, 1.8f * unit, paint)
+        canvas.drawCircle(x + 27f * unit, y + 22f * unit - wave - motionWave, 1.8f * unit, paint)
 
         paint.color = withAlpha(p.accent, if (isSpeaking) 185 else 95)
         canvas.drawCircle(x + 31f * unit, y + 18f * unit - wave, 1.5f * unit, paint)
