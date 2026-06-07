@@ -505,8 +505,7 @@ fun AppDrawerScreen(onLaunchApp: (String) -> Unit) {
     }
 }
 
-// (TeachGrowScreen and all its helper composables remain exactly as in the previous successful replace)
-// They are self-contained and do not need changes for this scope fix.
+// TeachGrowScreen and helpers (already present from previous upgrade)
 
 @Composable
 fun TeachGrowScreen(
@@ -1096,6 +1095,91 @@ fun formatTeachDate(timestamp: Long): String {
         ""
     }
 }
+
+// ==================== AI PROVIDER SCREEN (restored) ====================
+
+@Composable
+fun AIProviderScreen() {
+    val context = LocalContext.current
+    val client = remember { com.sparkx.fairyos.domain.ai.SparkAIClient(context) }
+    var selected by remember { mutableStateOf(com.sparkx.fairyos.domain.ai.SparkAIClient.Provider.OPENAI) }
+    var keyInput by remember { mutableStateOf("") }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF0D0B1A))
+            .padding(20.dp)
+    ) {
+        Text(
+            "AI Provider Console",
+            style = MaterialTheme.typography.headlineSmall,
+            color = Color(0xFF00E5FF)
+        )
+        Text(
+            "Add your own keys. Stored securely. No calls without your enable.",
+            color = Color.Gray,
+            fontSize = 13.sp
+        )
+        Spacer(Modifier.height(16.dp))
+
+        com.sparkx.fairyos.domain.ai.SparkAIClient.Provider.values().forEach { provider ->
+            val hasKey = client.getApiKey(provider) != null
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 6.dp)
+                    .clickable { selected = provider },
+                colors = CardDefaults.cardColors(
+                    containerColor = if (selected == provider) Color(0xFF2A1F4A) else Color(0xFF1A1530)
+                )
+            ) {
+                Row(
+                    Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        provider.name,
+                        modifier = Modifier.weight(1f),
+                        color = Color.White,
+                        fontWeight = FontWeight.Medium
+                    )
+                    if (hasKey) Text("Configured", color = Color(0xFF00E5FF), fontSize = 12.sp)
+                }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        OutlinedTextField(
+            value = keyInput,
+            onValueChange = { keyInput = it },
+            label = { Text("Paste ${selected.name} API Key") },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Button(
+            onClick = {
+                if (keyInput.isNotBlank()) {
+                    client.saveApiKey(selected, keyInput.trim())
+                    keyInput = ""
+                }
+            },
+            modifier = Modifier.align(Alignment.End)
+        ) {
+            Text("Save Key Securely")
+        }
+
+        Spacer(Modifier.height(16.dp))
+        Text(
+            "Cloud features activate only when key is present. All processing respects your privacy.",
+            fontSize = 12.sp,
+            color = Color.Gray
+        )
+    }
+}
+
+// ==================== SETTINGS SCREEN ====================
 
 @Composable
 fun SettingsScreen(
