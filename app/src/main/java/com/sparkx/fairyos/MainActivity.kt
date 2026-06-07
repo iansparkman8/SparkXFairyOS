@@ -231,7 +231,15 @@ class MainActivity : ComponentActivity() {
                         onLaunchApp = { pkg -> launchApp(pkg) },
                         onRequestOverlayPermission = { requestOverlayPermission() },
                         navController = rememberNavController(),
-                        avatarPulseKey = avatarPulseKey
+                        avatarPulseKey = avatarPulseKey,
+                        onAvatarTap = {
+                            currentMood = SparkMood.HAPPY
+                            avatarPulseKey++
+                            if (overlayVisible) {
+                                SparkOverlayController.updateMood(this@MainActivity, currentMood)
+                            }
+                            voiceController.speak("I'm here.")
+                        }
                     )
                 }
             }
@@ -349,7 +357,8 @@ fun SparkXApp(
     onLaunchApp: (String) -> Unit,
     onRequestOverlayPermission: () -> Unit,
     navController: NavHostController,
-    avatarPulseKey: Int = 0
+    avatarPulseKey: Int = 0,
+    onAvatarTap: () -> Unit = {}
 ) {
     val context = LocalContext.current
 
@@ -405,10 +414,7 @@ fun SparkXApp(
                     onNavigateToTeach = { navController.navigate("teach") },
                     isListening = isListening,
                     avatarPulseKey = avatarPulseKey,
-                    onAvatarTap = {
-                        // currentMood is a read-only parameter here; parent state owns mood changes
-                        avatarPulseKey++
-                    }
+                    onAvatarTap = onAvatarTap
                 )
             }
             composable("apps") { AppDrawerScreen(onLaunchApp = onLaunchApp) }
