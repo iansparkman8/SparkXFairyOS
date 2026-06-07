@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.sparkx.fairyos.FairyForm
 import com.sparkx.fairyos.domain.mood.SparkMood
 import kotlin.math.*
 
@@ -20,8 +21,11 @@ fun SparkBabyAvatar(
     modifier: Modifier = Modifier,
     size: Dp = 280.dp,
     reactionKey: Int = 0,
-    visualIntensity: Float = 1f
+    visualIntensity: Float = 1f,
+    form: FairyForm = FairyForm.Androgynous
 ) {
+    val fairyPalette = form.palette()
+
     val infiniteTransition = rememberInfiniteTransition(label = "fairy")
 
     val phase by infiniteTransition.animateFloat(
@@ -44,7 +48,6 @@ fun SparkBabyAvatar(
         label = "speaking"
     )
 
-    // Blink loop
     val blinkPhase by infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
@@ -56,7 +59,6 @@ fun SparkBabyAvatar(
     )
     val isBlinking = blinkPhase > 0.93f && mood != SparkMood.ALERT && mood != SparkMood.SLEEPY
 
-    // Reaction bounce (for tap)
     val reactionScale by animateFloatAsState(
         targetValue = if (reactionKey % 2 == 0) 1f else 1.04f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
@@ -66,29 +68,27 @@ fun SparkBabyAvatar(
     Canvas(modifier = modifier.size(size)) {
         val cx = size.toPx() / 2
         val baseCy = size.toPx() / 2 + 18f
-
-        // Gentle breathing bob
         val bob = sin(phase * 0.85f).toFloat() * 6f * visualIntensity
         val cy = baseCy + bob
 
         val s = size.toPx() * 0.38f * reactionScale
 
-        // Aura
+        // Aura with form color
         val auraR = s * (if (isSpeaking) 1.38f else 1.18f) + sin(phase * 0.7f).toFloat() * 14f
         drawCircle(
-            color = Color(0xFF00E5FF).copy(alpha = if (isSpeaking) 0.32f else 0.16f),
+            color = fairyPalette.aura.copy(alpha = if (isSpeaking) 0.32f else 0.16f),
             radius = auraR,
             center = Offset(cx, cy)
         )
 
-        // Wings
+        // Wings with form palette
         val flap = if (isSpeaking || mood == SparkMood.HAPPY) sin(speakingPhase * 1.9f).toFloat() * 0.28f else sin(phase * 0.55f).toFloat() * 0.11f
-        drawWing(this, cx - s * 0.32f, cy, s, flap, left = true)
-        drawWing(this, cx + s * 0.32f, cy, s, flap, left = false)
+        drawWing(this, cx - s * 0.32f, cy, s, flap, left = true, palette = fairyPalette)
+        drawWing(this, cx + s * 0.32f, cy, s, flap, left = false, palette = fairyPalette)
 
         // Body
         drawOval(
-            color = Color(0xFF7B4C9A),
+            color = fairyPalette.shadow,
             topLeft = Offset(cx - s * 0.29f, cy - s * 0.12f),
             size = androidx.compose.ui.geometry.Size(s * 0.58f, s * 0.72f)
         )
@@ -97,22 +97,13 @@ fun SparkBabyAvatar(
         val headY = cy - s * 0.36f
         drawCircle(color = Color(0xFFFFE8D0), radius = s * 0.33f, center = Offset(cx, headY))
 
-        // Crown / Halo
-        val crownColor = if (isSpeaking) Color(0xFFFFD700) else Color(0xFFB39DDB)
+        // Crown
+        val crownColor = if (isSpeaking) fairyPalette.accent else fairyPalette.aura
         drawCircle(color = crownColor, radius = s * 0.145f, center = Offset(cx, headY - s * 0.29f))
-
-        // Crown spikes
-        for (i in 0 until 5) {
-            val ang = (i * 72 - 90) * PI / 180f
-            val px = cx + cos(ang).toFloat() * s * 0.23f
-            val py = headY - s * 0.29f + sin(ang).toFloat() * s * 0.11f
-            drawLine(crownColor, Offset(cx, headY - s * 0.29f), Offset(px, py - 14f), strokeWidth = 5f)
-        }
 
         // Eyes
         val eyeY = headY - s * 0.09f
         val eyeDist = s * 0.155f
-
         when {
             mood == SparkMood.SLEEPY -> {
                 drawLine(Color(0xFF3D2A1F), Offset(cx - eyeDist, eyeY), Offset(cx - eyeDist + s*0.13f, eyeY), strokeWidth = 7f)
@@ -129,7 +120,6 @@ fun SparkBabyAvatar(
             else -> {
                 drawCircle(Color.Black, radius = s * 0.075f, center = Offset(cx - eyeDist, eyeY))
                 drawCircle(Color.Black, radius = s * 0.075f, center = Offset(cx + eyeDist, eyeY))
-                // Eye highlights
                 drawCircle(Color.White.copy(alpha = 0.6f), radius = s * 0.025f, center = Offset(cx - eyeDist + s*0.02f, eyeY - s*0.02f))
                 drawCircle(Color.White.copy(alpha = 0.6f), radius = s * 0.025f, center = Offset(cx + eyeDist + s*0.02f, eyeY - s*0.02f))
             }
@@ -143,7 +133,7 @@ fun SparkBabyAvatar(
             size = androidx.compose.ui.geometry.Size(s * 0.21f, mouthOpen)
         )
 
-        // Orbiting sparkles (always visible, more when happy/speaking)
+        // Idle sparkles + form accent
         val particleCount = when (mood) {
             SparkMood.HAPPY -> 13
             SparkMood.SPEAKING -> 15
@@ -156,20 +146,28 @@ fun SparkBabyAvatar(
             val px = cx + cos(ang).toFloat() * r
             val py = cy + sin(ang).toFloat() * r * 0.68f
             val alpha = if (mood == SparkMood.HAPPY || isSpeaking) 0.85f else 0.55f
-            drawCircle(Color(0xFF7CF8FF), radius = 3.5f, center = Offset(px, py), alpha = alpha * visualIntensity)
+            drawCircle(fairyPalette.accent, radius = 3.5f, center = Offset(px, py), alpha = alpha * visualIntensity)
         }
 
-        // Core pulse (visible even when idle)
+        // Core pulse with form core color
         val pulse = if (isSpeaking) sin(speakingPhase * 3.8f).toFloat() * 0.22f + 0.92f else sin(phase * 0.65f).toFloat() * 0.14f + 0.86f
         drawCircle(
-            color = Color(0xFFFF6EC7).copy(alpha = 0.55f * pulse),
+            color = fairyPalette.core.copy(alpha = 0.55f * pulse),
             radius = s * 0.155f * pulse,
             center = Offset(cx, cy + s * 0.09f)
         )
     }
 }
 
-private fun drawWing(scope: DrawScope, x: Float, y: Float, s: Float, flap: Float, left: Boolean) {
+private fun drawWing(
+    scope: DrawScope,
+    x: Float,
+    y: Float,
+    s: Float,
+    flap: Float,
+    left: Boolean,
+    palette: com.sparkx.fairyos.FairyPalette
+) {
     val sign = if (left) -1f else 1f
     val path = Path().apply {
         moveTo(x, y)
@@ -179,5 +177,5 @@ private fun drawWing(scope: DrawScope, x: Float, y: Float, s: Float, flap: Float
         )
         close()
     }
-    scope.drawPath(path, color = Color(0xFF9EC8FF).copy(alpha = 0.78f))
+    scope.drawPath(path, color = palette.wingA.copy(alpha = 0.78f))
 }
