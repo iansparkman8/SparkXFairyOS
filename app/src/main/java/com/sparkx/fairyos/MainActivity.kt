@@ -8,6 +8,7 @@ import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -15,10 +16,12 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -451,10 +454,6 @@ fun SparkXApp(
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// HOME SCREEN — Polished body (signature preserved)
-// ─────────────────────────────────────────────────────────────────────────────
-
 @Composable
 fun SparkXHomeScreen(
     currentMood: SparkMood,
@@ -486,9 +485,7 @@ fun SparkXHomeScreen(
     val moodAccent = when (currentMood) {
         SparkMood.HAPPY   -> gold
         SparkMood.ALERT   -> Color(0xFFFF6B6B)
-        SparkMood.PLAYFUL -> Color(0xFFFF9EF5)
-        SparkMood.FOCUSED -> cyan
-        SparkMood.CALM    -> violet
+        SparkMood.THINKING -> cyan
         else              -> violet
     }
 
