@@ -35,6 +35,7 @@ import androidx.navigation.compose.*
 import com.sparkx.fairyos.domain.command.SparkCommandRouter
 import com.sparkx.fairyos.domain.memory.TeachGrowEntry
 import com.sparkx.fairyos.domain.mood.SparkMood
+import com.sparkx.fairyos.domain.personality.SparkGrowthState
 import com.sparkx.fairyos.domain.voice.SparkVoiceController
 import com.sparkx.fairyos.overlay.SparkOverlayController
 import com.sparkx.fairyos.ui.components.HoloBackground
@@ -54,6 +55,7 @@ class MainActivity : ComponentActivity() {
     private var overlayVisible by mutableStateOf(false)
     private var commandInput by mutableStateOf("")
     private var teachEntries = mutableStateListOf<TeachGrowEntry>()
+    private var growthState by mutableStateOf(SparkGrowthState())
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -66,6 +68,7 @@ class MainActivity : ComponentActivity() {
 
         val app = application as SparkXApplication
         val repo = app.teachGrowRepository
+        val personalityRepo = app.sparkPersonalityRepository
 
         val prefs = getSharedPreferences("sparkx_prefs", MODE_PRIVATE)
         isOwnerMode = prefs.getBoolean("owner_mode", false)
@@ -79,13 +82,27 @@ class MainActivity : ComponentActivity() {
         )
         voiceController.initialize()
 
+        // Collect growth state for queries
+        lifecycleScope.launch {
+            personalityRepo.growthFlow.collect { growthState = it }
+        }
+
         commandRouter = SparkCommandRouter(
             context = this,
             teachGrowRepo = repo,
             onMoodChange = { mood -> currentMood = mood },
             onSpeak = { text -> voiceController.speak(text) },
             onShowOverlay = { showOverlay() },
-            onHideOverlay = { hideOverlay() }
+            onHideOverlay = { hideOverlay() },
+            onGrowthEntryLogged = { type ->
+                lifecycleScope.launch {
+                    val (didUnlock, unlockedForm) = personalityRepo.logEntryAndAddXp(type)
+                    if (didUnlock && unlockedForm != null) {
+                        voiceController.speak("I unlocked a new form: ${unlockedForm.displayName}.")
+                    }
+                }
+            },
+            getGrowthSummary = { growthState.describe() }
         )
 
         lifecycleScope.launch {
@@ -97,6 +114,12 @@ class MainActivity : ComponentActivity() {
             lifecycleScope.launch {
                 val entry = TeachGrowEntry(title = title, content = content, type = type)
                 repo.addEntry(entry)
+
+                // Growth XP hook
+                val (didUnlock, unlockedForm) = personalityRepo.logEntryAndAddXp(type)
+                if (didUnlock && unlockedForm != null) {
+                    voiceController.speak("I unlocked a new form: ${unlockedForm.displayName}. You can use it soon in my Wardrobe.")
+                }
             }
         }
 
@@ -295,8 +318,7 @@ fun SparkXApp(
                 NavigationBarItem(
                     selected = navController.currentDestination?.route == "settings",
                     onClick = { navController.navigate("settings") },
-                    icon = { Icon(Icons.Default.Settings, contentDescription = "Settings") },
-                    label = { Text("Settings") }
+                    icon = { Icon(Icons.Default.Settings, contentDescription = "Settings") }
                 )
             }
         }
@@ -411,7 +433,7 @@ fun SparkXHomeScreen(
                 OutlinedTextField(
                     value = commandInput,
                     onValueChange = onCommandInputChange,
-                    placeholder = { Text("Ask Spark Baby... (open youtube, happy, remember this improvement, log this bug)") },
+                    placeholder = { Text("Ask Spark Baby... (open youtube, happy, remember this improvement, what form are you)") },
                     modifier = Modifier.weight(1f),
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
@@ -1037,7 +1059,11 @@ fun TeachEntryEditorDialog(
 
 @Composable
 fun TemplateButtons(
-    onTemplate: (String, String, String) -> Unit
+    onTemplate = { templateTitle, templateContent, templateType ->
+        if (title.isBlank()) title = templateTitle
+        if (content.isBlank()) content = templateContent
+        type = templateType
+    }
 ) {
     Column {
         Text("Quick templates", color = Color.White, fontWeight = FontWeight.Bold)
