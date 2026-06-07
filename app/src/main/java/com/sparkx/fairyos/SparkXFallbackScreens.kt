@@ -23,49 +23,12 @@ fun AppDrawerScreen(
     onLaunchApp: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(22.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(text = "📱", color = Color.White)
-        Spacer(modifier = Modifier.height(12.dp))
-        Text(text = "App Drawer", color = Color.White)
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "Quick launch shortcuts for Spark Baby.",
-            color = Color(0xFFB8AEE8)
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        QuickActionButton(
-            title = "Open Settings",
-            subtitle = "Launch Android Settings",
-            emoji = "⚙️",
-            onClick = { onLaunchApp("com.android.settings") }
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        QuickActionButton(
-            title = "Open Browser",
-            subtitle = "Launch default browser if available",
-            emoji = "🌐",
-            onClick = { onLaunchApp("browser") }
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        QuickActionButton(
-            title = "Open Assistant",
-            subtitle = "Placeholder shortcut",
-            emoji = "🧠",
-            onClick = { onLaunchApp("assistant") }
-        )
-    }
+    PlaceholderScreen(
+        modifier = modifier,
+        emoji = "📱",
+        title = "App Drawer",
+        body = "Quick app launcher shell is active."
+    )
 }
 
 @Composable
@@ -84,7 +47,7 @@ fun TeachGrowScreen(
         modifier = modifier,
         emoji = "🌱",
         title = "Teach & Grow",
-        body = "Safe learning lab ready. Entries loaded: ${entries.size}"
+        body = "Learning lab shell active. Entries loaded: ${entries.size}"
     )
 }
 
@@ -96,7 +59,7 @@ fun AIProviderScreen(
         modifier = modifier,
         emoji = "🧠",
         title = "AI Providers",
-        body = "Provider connection screen placeholder. Keep API keys private and user-controlled."
+        body = "Provider connection shell active. Private keys stay user-controlled."
     )
 }
 
@@ -116,38 +79,38 @@ fun SettingsScreen(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(text = "⚙️", color = Color.White)
-        Spacer(modifier = Modifier.height(12.dp))
-        Text(text = "Settings", color = Color.White)
-        Spacer(modifier = Modifier.height(8.dp))
+        Text("⚙️", color = Color.White)
+        Spacer(Modifier.height(12.dp))
+        Text("Settings", color = Color.White)
+        Spacer(Modifier.height(8.dp))
         Text(
             text = "Owner mode: $isOwnerMode · Overlay visible: $overlayVisible",
             color = Color(0xFFB8AEE8)
         )
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(Modifier.height(14.dp))
 
         QuickActionButton(
-            title = "Toggle Owner Mode",
-            subtitle = "Switch secure owner controls",
+            title = "Owner Mode",
+            subtitle = "Toggle protected controls",
             emoji = "🔐",
             onClick = onToggleOwnerMode
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(Modifier.height(8.dp))
 
         QuickActionButton(
-            title = "Toggle Overlay",
+            title = "Overlay",
             subtitle = "Show or hide Spark Baby",
             emoji = "✨",
             onClick = onToggleOverlay
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(Modifier.height(8.dp))
 
         QuickActionButton(
-            title = "Request Overlay Permission",
-            subtitle = "Open Android overlay permission screen",
+            title = "Overlay Permission",
+            subtitle = "Open Android permission screen",
             emoji = "📲",
             onClick = onRequestOverlay
         )
@@ -167,9 +130,7 @@ fun QuickActionButton(
             .fillMaxWidth()
             .clickable { onClick() },
         shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF19142A)
-        ),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF19142A)),
         border = BorderStroke(1.dp, Color(0x5539D7FF))
     ) {
         Row(
@@ -177,7 +138,7 @@ fun QuickActionButton(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(text = emoji)
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(Modifier.width(12.dp))
             Column {
                 Text(text = title, color = Color.White)
                 if (subtitle.isNotBlank()) {
@@ -201,9 +162,7 @@ fun QuickActionButton(
             .fillMaxWidth()
             .clickable { onClick() },
         shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF19142A)
-        ),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF19142A)),
         border = BorderStroke(1.dp, Color(0x5539D7FF))
     ) {
         Row(
@@ -215,7 +174,7 @@ fun QuickActionButton(
                 contentDescription = title,
                 tint = Color(0xFF39D7FF)
             )
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(Modifier.width(12.dp))
             Column {
                 Text(text = title, color = Color.White)
                 if (subtitle.isNotBlank()) {
@@ -234,13 +193,7 @@ fun DockButton(
     modifier: Modifier = Modifier,
     onClick: () -> Unit = {}
 ) {
-    DockButtonContent(
-        label = label,
-        emoji = emoji,
-        selected = selected,
-        modifier = modifier,
-        onClick = onClick
-    )
+    DockButtonContent(label, emoji, selected, modifier, onClick)
 }
 
 @Composable
@@ -252,13 +205,7 @@ fun DockButton(
     modifier: Modifier = Modifier,
     onClick: () -> Unit = {}
 ) {
-    DockButtonContent(
-        label = label,
-        emoji = emoji,
-        selected = selected,
-        modifier = modifier,
-        onClick = onClick
-    )
+    DockButtonContent(label, emoji, selected, modifier, onClick)
 }
 
 @Composable
@@ -303,9 +250,9 @@ private fun PlaceholderScreen(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(text = emoji, color = Color.White)
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(Modifier.height(12.dp))
         Text(text = title, color = Color.White)
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(Modifier.height(8.dp))
         Text(text = body, color = Color(0xFFB8AEE8))
     }
 }
