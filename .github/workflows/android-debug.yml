@@ -13,6 +13,23 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Debug source snapshot
+      run: |
+        echo "=== Git commit ==="
+        git rev-parse HEAD
+
+        echo "=== MainActivity around line 390-430 ==="
+        nl -ba app/src/main/java/com/sparkx/fairyos/MainActivity.kt | sed -n '390,430p' || true
+
+        echo "=== Search currentScreen ==="
+        grep -R "currentScreen" -n app/src/main/java/com/sparkx/fairyos || true
+
+        echo "=== SparkBabyAvatar imports/top ==="
+        nl -ba app/src/main/java/com/sparkx/fairyos/ui/components/SparkBabyAvatar.kt | sed -n '1,45p' || true
+
+        echo "=== FairyIdentity ==="
+        nl -ba app/src/main/java/com/sparkx/fairyos/FairyIdentity.kt | sed -n '1,80p' || true
+
     - name: Set up JDK 17
       uses: actions/setup-java@v4
       with:
