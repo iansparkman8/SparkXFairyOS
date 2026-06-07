@@ -30,7 +30,9 @@ jobs:
         ./scripts/preflight_check.sh || echo "Preflight warnings (non-blocking for v7)"
 
     - name: Assemble Debug APK
-      run: gradle assembleDebug --stacktrace
+      run: |
+        chmod +x gradlew
+        ./gradlew clean assembleDebug --stacktrace
 
     - name: Upload Debug APK artifact
       uses: actions/upload-artifact@v4
