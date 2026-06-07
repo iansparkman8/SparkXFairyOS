@@ -24,6 +24,7 @@ import kotlin.math.sin
  *
  * Pure Canvas. No assets. No 3D engine.
  * Designed for a small floating WindowManager overlay.
+ * Prioritizes clear readable face + character at small overlay size.
  */
 class SparkOverlayBubbleView(context: Context) : View(context) {
 
@@ -136,13 +137,16 @@ class SparkOverlayBubbleView(context: Context) : View(context) {
         drawOuterAura(canvas, palette, t)
         drawGlassBubble(canvas, palette, t)
         drawOrbitRings(canvas, palette, t)
-        drawSparkles(canvas, palette, t)
         drawWings(canvas, bodyCx, bodyCy, palette, t, breath)
+        drawSparkles(canvas, palette, t)
+
+        // Keep body subtle so it doesn't fight the face
         drawBodyAndDress(canvas, bodyCx, bodyCy, palette, t, speakPulse)
-        drawArms(canvas, bodyCx, bodyCy, palette, t)
-        drawHeadHairFace(canvas, bodyCx, bodyCy, palette, t, speakPulse)
-        drawCrownAndHalo(canvas, bodyCx, bodyCy, palette, t)
-        drawCore(canvas, bodyCx, bodyCy, palette, t, speakPulse)
+
+        // Clear readable mini character face (priority layer)
+        drawMiniFace(canvas, bodyCx, bodyCy, palette, t, speakPulse)
+        drawAntenna(canvas, bodyCx, bodyCy, palette, t)
+        drawTapBurst(canvas, palette, t)
 
         postInvalidateOnAnimation()
     }
@@ -465,271 +469,178 @@ class SparkOverlayBubbleView(context: Context) : View(context) {
         canvas.drawLine(x + 6f * unit, y + 39f * unit, x + 9f * unit, y + 48f * unit, stroke)
     }
 
-    private fun drawArms(canvas: Canvas, x: Float, y: Float, p: MoodPalette, t: Float) {
-        val wave = if (isSpeaking || currentMood == SparkMood.HAPPY) sin(t * 8f) * 2.7f * unit else 0f
-        val motionWave = motionVx * 0.25f
+    // ============================================================
+    // CLEAR MINI CHARACTER FACE (priority for small overlay size)
+    // ============================================================
 
-        stroke.style = Paint.Style.STROKE
-        stroke.strokeWidth = 2.1f * unit
-        stroke.color = Color.argb(205, 255, 220, 200)
+    private fun drawMiniFace(
+        canvas: Canvas,
+        x: Float,
+        y: Float,
+        p: MoodPalette,
+        t: Float,
+        speakPulse: Float
+    ) {
+        val headR = 19f * unit
+        val faceY = y - 4f * unit
 
-        path.reset()
-        path.moveTo(x - 10f * unit, y + 5f * unit)
-        path.cubicTo(x - 19f * unit, y + 10f * unit, x - 23f * unit, y + 18f * unit, x - 27f * unit, y + 22f * unit + wave + motionWave)
-        canvas.drawPath(path, stroke)
-
-        path.reset()
-        path.moveTo(x + 10f * unit, y + 5f * unit)
-        path.cubicTo(x + 19f * unit, y + 10f * unit, x + 23f * unit, y + 18f * unit, x + 27f * unit, y + 22f * unit - wave - motionWave)
-        canvas.drawPath(path, stroke)
-
-        paint.style = Paint.Style.FILL
-        paint.color = Color.argb(220, 255, 225, 205)
-        canvas.drawCircle(x - 27f * unit, y + 22f * unit + wave + motionWave, 1.8f * unit, paint)
-        canvas.drawCircle(x + 27f * unit, y + 22f * unit - wave - motionWave, 1.8f * unit, paint)
-
-        paint.color = withAlpha(p.accent, if (isSpeaking) 185 else 95)
-        canvas.drawCircle(x + 31f * unit, y + 18f * unit - wave, 1.5f * unit, paint)
-    }
-
-    private fun drawHeadHairFace(canvas: Canvas, x: Float, y: Float, p: MoodPalette, t: Float, speakPulse: Float) {
-        val headY = y - 22f * unit
-        val headR = 16f * unit
-        val skinLight = Color.rgb(255, 226, 205)
-        val skinShadow = Color.rgb(208, 155, 180)
-
-        path.reset()
-        path.moveTo(x - 17f * unit, headY - 9f * unit)
-        path.cubicTo(x - 25f * unit, headY - 4f * unit, x - 23f * unit, headY + 17f * unit, x - 15f * unit, headY + 21f * unit)
-        path.cubicTo(x - 10f * unit, headY + 31f * unit, x + 10f * unit, headY + 31f * unit, x + 15f * unit, headY + 21f * unit)
-        path.cubicTo(x + 23f * unit, headY + 17f * unit, x + 25f * unit, headY - 4f * unit, x + 17f * unit, headY - 9f * unit)
-        path.cubicTo(x + 11f * unit, headY - 22f * unit, x - 11f * unit, headY - 22f * unit, x - 17f * unit, headY - 9f * unit)
-
-        paint.style = Paint.Style.FILL
-        paint.shader = LinearGradient(
-            x,
-            headY - 23f * unit,
-            x,
-            headY + 32f * unit,
-            intArrayOf(
-                Color.argb(245, 45, 23, 80),
-                Color.argb(240, 95, 40, 145),
-                Color.argb(220, 255, 110, 199)
-            ),
-            floatArrayOf(0f, 0.55f, 1f),
-            Shader.TileMode.CLAMP
-        )
-        canvas.drawPath(path, paint)
-        paint.shader = null
-
+        // Face glow / head
         paint.style = Paint.Style.FILL
         paint.shader = RadialGradient(
             x - 5f * unit,
-            headY - 6f * unit,
-            headR * 1.45f,
-            intArrayOf(skinLight, Color.rgb(247, 198, 190), skinShadow),
-            floatArrayOf(0f, 0.55f, 1f),
+            faceY - 7f * unit,
+            headR * 1.4f,
+            intArrayOf(
+                withAlpha(Color.WHITE, 235),
+                withAlpha(p.core, 230),
+                withAlpha(p.dress, 230)
+            ),
+            floatArrayOf(0f, 0.45f, 1f),
             Shader.TileMode.CLAMP
         )
-        canvas.drawOval(
-            x - headR * 0.9f,
-            headY - headR,
-            x + headR * 0.9f,
-            headY + headR * 1.05f,
-            paint
-        )
+        canvas.drawCircle(x, faceY, headR, paint)
         paint.shader = null
 
-        paint.color = Color.argb(235, 70, 28, 115)
-        path.reset()
-        path.moveTo(x - 15f * unit, headY - 10f * unit)
-        path.cubicTo(x - 7f * unit, headY - 22f * unit, x + 6f * unit, headY - 22f * unit, x + 15f * unit, headY - 11f * unit)
-        path.cubicTo(x + 5f * unit, headY - 8f * unit, x - 2f * unit, headY - 5f * unit, x - 10f * unit, headY - 1f * unit)
-        path.cubicTo(x - 9f * unit, headY - 5f * unit, x - 12f * unit, headY - 8f * unit, x - 15f * unit, headY - 10f * unit)
-        canvas.drawPath(path, paint)
+        // Mood blink / sleepy eyes
+        val blink = if ((t % 4f) > 3.72f && (t % 4f) < 3.86f) 0.15f else 1f
+        val sleepy = currentMood == SparkMood.SLEEPY
+        val alert = currentMood == SparkMood.ALERT
+        val happy = currentMood == SparkMood.HAPPY
+        val thinking = currentMood == SparkMood.THINKING
 
+        val eyeY = faceY - 3f * unit
+        val eyeRx = if (alert) 3.4f * unit else 3.0f * unit
+        val eyeRy = if (sleepy) 0.9f * unit else 4.2f * unit * blink
+
+        paint.color = Color.rgb(12, 16, 35)
+
+        if (sleepy) {
+            stroke.style = Paint.Style.STROKE
+            stroke.strokeWidth = 1.7f * unit
+            stroke.color = Color.rgb(12, 16, 35)
+            val left = Path().apply {
+                moveTo(x - 9f * unit, eyeY)
+                quadTo(x - 6.5f * unit, eyeY + 2f * unit, x - 4f * unit, eyeY)
+            }
+            val right = Path().apply {
+                moveTo(x + 4f * unit, eyeY)
+                quadTo(x + 6.5f * unit, eyeY + 2f * unit, x + 9f * unit, eyeY)
+            }
+            canvas.drawPath(left, stroke)
+            canvas.drawPath(right, stroke)
+        } else {
+            canvas.drawOval(
+                x - 9f * unit - eyeRx,
+                eyeY - eyeRy,
+                x - 9f * unit + eyeRx,
+                eyeY + eyeRy,
+                paint
+            )
+            canvas.drawOval(
+                x + 9f * unit - eyeRx,
+                eyeY - eyeRy,
+                x + 9f * unit + eyeRx,
+                eyeY + eyeRy,
+                paint
+            )
+
+            // Eye shine
+            paint.color = Color.WHITE
+            canvas.drawCircle(x - 7.8f * unit, eyeY - 1.6f * unit, 1.1f * unit, paint)
+            canvas.drawCircle(x + 10.2f * unit, eyeY - 1.6f * unit, 1.1f * unit, paint)
+        }
+
+        // Mouth
         stroke.style = Paint.Style.STROKE
-        stroke.strokeWidth = 0.75f * unit
-        stroke.color = Color.argb(120, 255, 160, 220)
-        for (i in -2..2) {
-            val sx = x + i * 4f * unit
+        stroke.strokeCap = Paint.Cap.ROUND
+        stroke.strokeWidth = 1.8f * unit
+        stroke.color = Color.rgb(12, 16, 35)
+
+        if (isSpeaking || currentMood == SparkMood.SPEAKING) {
+            paint.color = Color.rgb(12, 16, 35)
+            canvas.drawOval(
+                x - 4.5f * unit * speakPulse,
+                faceY + 7f * unit,
+                x + 4.5f * unit * speakPulse,
+                faceY + 12f * unit,
+                paint
+            )
+        } else {
+            val smileDepth = when {
+                happy -> 6.5f * unit
+                thinking -> 2.5f * unit
+                alert -> 1.0f * unit
+                sleepy -> 1.5f * unit
+                else -> 4f * unit
+            }
+
             path.reset()
-            path.moveTo(sx, headY - 17f * unit)
-            path.cubicTo(sx + i * unit, headY - 5f * unit, sx - 2f * unit, headY + 9f * unit, sx + i * 1.3f * unit, headY + 22f * unit)
+            path.moveTo(x - 6f * unit, faceY + 7f * unit)
+            path.quadTo(x, faceY + 7f * unit + smileDepth, x + 6f * unit, faceY + 7f * unit)
             canvas.drawPath(path, stroke)
         }
 
-        drawEyes(canvas, x, headY, p, t)
-        drawMouth(canvas, x, headY, p, t, speakPulse)
-    }
-
-    private fun drawEyes(canvas: Canvas, x: Float, headY: Float, p: MoodPalette, t: Float) {
-        val eyeY = headY - 1f * unit
-        val leftX = x - 5.8f * unit
-        val rightX = x + 5.8f * unit
-
-        when (currentMood) {
-            SparkMood.SLEEPY -> {
-                stroke.style = Paint.Style.STROKE
-                stroke.strokeWidth = 1.25f * unit
-                stroke.color = Color.argb(210, 45, 25, 55)
-                canvas.drawArc(leftX - 4f * unit, eyeY - 2f * unit, leftX + 4f * unit, eyeY + 4f * unit, 15f, 145f, false, stroke)
-                canvas.drawArc(rightX - 4f * unit, eyeY - 2f * unit, rightX + 4f * unit, eyeY + 4f * unit, 20f, 145f, false, stroke)
-                return
-            }
-            SparkMood.ALERT -> {
-                drawSingleEye(canvas, leftX, eyeY - 0.6f * unit, p.eye, scale = 1.18f)
-                drawSingleEye(canvas, rightX, eyeY - 0.6f * unit, p.eye, scale = 1.18f)
-            }
-            else -> {
-                val blink = if ((sin(t * 1.1f) > 0.985f) && !isSpeaking) 0.22f else 1f
-                drawSingleEye(canvas, leftX, eyeY, p.eye, scale = blink)
-                drawSingleEye(canvas, rightX, eyeY, p.eye, scale = blink)
-            }
-        }
-    }
-
-    private fun drawSingleEye(canvas: Canvas, x: Float, y: Float, color: Int, scale: Float) {
-        val w = 4.1f * unit
-        val h = 5.0f * unit * scale
-
+        // Cheeks
         paint.style = Paint.Style.FILL
-        paint.color = Color.argb(238, 255, 255, 255)
-        canvas.drawOval(x - w, y - h, x + w, y + h, paint)
-
-        paint.shader = RadialGradient(
-            x,
-            y,
-            4.5f * unit,
-            intArrayOf(Color.WHITE, color, Color.rgb(20, 30, 55)),
-            floatArrayOf(0f, 0.42f, 1f),
-            Shader.TileMode.CLAMP
-        )
-        canvas.drawCircle(x, y, 2.55f * unit * scale.coerceAtLeast(0.4f), paint)
-        paint.shader = null
-
-        paint.color = Color.rgb(10, 10, 20)
-        canvas.drawCircle(x, y, 1.25f * unit * scale.coerceAtLeast(0.4f), paint)
-
-        paint.color = Color.WHITE
-        canvas.drawCircle(x - 0.9f * unit, y - 1.1f * unit, 0.55f * unit, paint)
+        paint.color = withAlpha(p.accent, if (happy) 95 else 50)
+        canvas.drawCircle(x - 13f * unit, faceY + 5f * unit, 2.4f * unit, paint)
+        canvas.drawCircle(x + 13f * unit, faceY + 5f * unit, 2.4f * unit, paint)
     }
 
-    private fun drawMouth(canvas: Canvas, x: Float, headY: Float, p: MoodPalette, t: Float, speakPulse: Float) {
-        val mouthY = headY + 8.6f * unit
-
-        paint.style = Paint.Style.FILL
-        paint.color = Color.argb(190, 120, 40, 70)
-
-        when {
-            isSpeaking -> {
-                val open = (2.2f + (sin(t * 20f) + 1f) * 2.1f) * unit * speakPulse
-                canvas.drawOval(
-                    x - 3.4f * unit,
-                    mouthY - open * 0.55f,
-                    x + 3.4f * unit,
-                    mouthY + open,
-                    paint
-                )
-                paint.color = withAlpha(p.accent, 120)
-                canvas.drawOval(
-                    x - 2.2f * unit,
-                    mouthY - open * 0.1f,
-                    x + 2.2f * unit,
-                    mouthY + open * 0.5f,
-                    paint
-                )
-            }
-            currentMood == SparkMood.HAPPY -> {
-                stroke.style = Paint.Style.STROKE
-                stroke.strokeWidth = 1.05f * unit
-                stroke.color = Color.argb(180, 110, 45, 65)
-                canvas.drawArc(
-                    x - 4f * unit,
-                    mouthY - 2f * unit,
-                    x + 4f * unit,
-                    mouthY + 4f * unit,
-                    15f,
-                    150f,
-                    false,
-                    stroke
-                )
-            }
-            currentMood == SparkMood.ALERT -> {
-                canvas.drawCircle(x, mouthY, 1.6f * unit, paint)
-            }
-            else -> {
-                stroke.style = Paint.Style.STROKE
-                stroke.strokeWidth = 0.85f * unit
-                stroke.color = Color.argb(145, 110, 45, 65)
-                canvas.drawLine(x - 2.6f * unit, mouthY, x + 2.6f * unit, mouthY, stroke)
-            }
-        }
-    }
-
-    private fun drawCrownAndHalo(canvas: Canvas, x: Float, y: Float, p: MoodPalette, t: Float) {
-        val headY = y - 22f * unit
-        val crownY = headY - 18f * unit
-        val pulse = 1f + sin(t * 5f) * 0.08f
-
-        canvas.save()
-        canvas.rotate(t * 16f, x, crownY)
+    private fun drawAntenna(
+        canvas: Canvas,
+        x: Float,
+        y: Float,
+        p: MoodPalette,
+        t: Float
+    ) {
+        val tilt = sin(t * 2.2f) * 2.5f * unit
         stroke.style = Paint.Style.STROKE
-        stroke.strokeWidth = 1f * unit
-        stroke.color = withAlpha(p.accent, if (isSpeaking) 175 else 105)
-        rect.set(
-            x - 13f * unit * pulse,
-            crownY - 5f * unit,
-            x + 13f * unit * pulse,
-            crownY + 5f * unit
-        )
-        canvas.drawOval(rect, stroke)
-        canvas.restore()
+        stroke.strokeCap = Paint.Cap.ROUND
+        stroke.strokeWidth = 1.7f * unit
+        stroke.color = withAlpha(p.accent, 210)
 
-        stroke.strokeWidth = 1.6f * unit
-        stroke.color = withAlpha(Color.rgb(255, 225, 120), 210)
-        path.reset()
-        path.moveTo(x - 9f * unit, crownY + 5f * unit)
-        path.lineTo(x - 5f * unit, crownY - 3f * unit)
-        path.lineTo(x, crownY + 2f * unit)
-        path.lineTo(x + 5f * unit, crownY - 3f * unit)
-        path.lineTo(x + 9f * unit, crownY + 5f * unit)
-        canvas.drawPath(path, stroke)
+        canvas.drawLine(
+            x,
+            y - 24f * unit,
+            x + tilt,
+            y - 39f * unit,
+            stroke
+        )
 
         paint.style = Paint.Style.FILL
-        paint.color = withAlpha(p.core, 220)
-        canvas.drawCircle(x, crownY - 2f * unit, 1.9f * unit, paint)
-        canvas.drawCircle(x - 5f * unit, crownY - 2f * unit, 1.25f * unit, paint)
-        canvas.drawCircle(x + 5f * unit, crownY - 2f * unit, 1.25f * unit, paint)
-    }
-
-    private fun drawCore(canvas: Canvas, x: Float, y: Float, p: MoodPalette, t: Float, speakPulse: Float) {
-        val coreX = x
-        val coreY = y + 11f * unit
-        val pulse = (1f + sin(t * if (isSpeaking) 13f else 3.5f) * 0.16f) * speakPulse
+        paint.color = p.accent
+        canvas.drawCircle(x + tilt, y - 41f * unit, 3.5f * unit, paint)
 
         glow.style = Paint.Style.FILL
-        glow.maskFilter = BlurMaskFilter(12f * unit, BlurMaskFilter.Blur.NORMAL)
-        glow.color = withAlpha(p.core, if (isSpeaking) 210 else 150)
-        canvas.drawCircle(coreX, coreY, 7f * unit * pulse, glow)
+        glow.maskFilter = BlurMaskFilter(8f * unit, BlurMaskFilter.Blur.NORMAL)
+        glow.color = withAlpha(p.accent, 120)
+        canvas.drawCircle(x + tilt, y - 41f * unit, 6f * unit, glow)
         glow.maskFilter = null
+    }
 
-        paint.style = Paint.Style.FILL
-        paint.shader = RadialGradient(
-            coreX - 1f * unit,
-            coreY - 1f * unit,
-            7f * unit,
-            intArrayOf(Color.WHITE, p.core, withAlpha(p.aura2, 230)),
-            floatArrayOf(0f, 0.38f, 1f),
-            Shader.TileMode.CLAMP
-        )
-        canvas.drawCircle(coreX, coreY, 4.4f * unit * pulse, paint)
-        paint.shader = null
+    private fun drawTapBurst(canvas: Canvas, p: MoodPalette, t: Float) {
+        val age = System.currentTimeMillis() - lastTapBurstTime
+        if (age !in 0..450) return
+
+        val progress = age / 450f
+        val radius = (18f + 38f * progress) * unit
+        val alpha = ((1f - progress) * 170).toInt().coerceIn(0, 170)
 
         stroke.style = Paint.Style.STROKE
-        stroke.strokeWidth = 0.8f * unit
-        stroke.color = withAlpha(Color.WHITE, 130)
-        canvas.drawCircle(coreX, coreY, 6.2f * unit * pulse, stroke)
+        stroke.strokeWidth = (2.4f * (1f - progress)).coerceAtLeast(0.5f) * unit
+        stroke.color = withAlpha(p.accent, alpha)
+
+        canvas.drawCircle(cx, cy, radius, stroke)
+
+        paint.style = Paint.Style.FILL
+        paint.color = withAlpha(p.core, alpha)
+        repeat(8) { i ->
+            val a = (i / 8f) * (PI * 2f).toFloat() + t * 2f
+            val px = cx + cos(a) * radius
+            val py = cy + sin(a) * radius
+            canvas.drawCircle(px, py, 2f * unit * (1f - progress), paint)
+        }
     }
 
     private fun withAlpha(color: Int, alpha: Int): Int {
