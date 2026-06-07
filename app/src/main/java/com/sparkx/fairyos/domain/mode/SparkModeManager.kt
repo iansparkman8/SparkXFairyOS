@@ -1,26 +1,19 @@
 package com.sparkx.fairyos.domain.mode
 
 import android.content.Context
-import androidx.datastore.preferences.core.booleanPreferencesKey
-import androidx.datastore.preferences.core.edit
-import com.sparkx.fairyos.dataStore
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
 
+/**
+ * Stub for v7. Owner Mode state is currently managed in MainActivity with SharedPreferences.
+ * Full DataStore version can be restored later.
+ */
 class SparkModeManager(private val context: Context) {
-    private val OWNER_MODE_KEY = booleanPreferencesKey("owner_mode_enabled")
-
-    val isOwnerMode: Flow<Boolean> = context.dataStore.data
-        .map { prefs -> prefs[OWNER_MODE_KEY] ?: false }
+    val isOwnerMode: Boolean = false
 
     suspend fun setOwnerMode(enabled: Boolean) {
-        context.dataStore.edit { prefs ->
-            prefs[OWNER_MODE_KEY] = enabled
-        }
+        // No-op in stub
     }
 
-    // Simple consent flag for wizard
     suspend fun enableOwnerModeWithConsent() {
-        setOwnerMode(true)
+        // No-op in stub
     }
 }
