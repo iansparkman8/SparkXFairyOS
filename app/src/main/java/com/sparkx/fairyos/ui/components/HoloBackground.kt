@@ -1,8 +1,15 @@
 package com.sparkx.fairyos.ui.components
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -42,10 +49,20 @@ fun HoloBackground(
     intensity: Float = 1f,
     ownerMode: Boolean = false
 ) {
+    val phase by rememberInfiniteTransition(label = "fairy_world_bg").animateFloat(
+        initialValue = 0f,
+        targetValue = 10_000f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(120_000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "fairy_world_phase"
+    )
+
     Canvas(modifier = modifier.fillMaxSize()) {
         val w = size.width
         val h = size.height
-        val t = System.currentTimeMillis() / 1200f
+        val t = phase
 
         when (worldTheme) {
             SparkWorldTheme.HOLO_DREAM -> drawHoloDream(this, w, h, t, intensity)
