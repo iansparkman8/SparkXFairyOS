@@ -16,25 +16,28 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import com.sparkx.fairyos.domain.memory.TeachGrowEntry
 
-enum class AppDrawerScreen(
+data class AppDrawerScreen(
     val label: String,
     val emoji: String
 ) {
-    Home("Home", "✨"),
-    TeachGrow("Teach & Grow", "🌱"),
-    AIProvider("AI Providers", "🧠"),
-    Settings("Settings", "⚙️")
+    companion object {
+        val Home = AppDrawerScreen("Home", "✨")
+        val TeachGrow = AppDrawerScreen("Teach & Grow", "🌱")
+        val AIProvider = AppDrawerScreen("AI Providers", "🧠")
+        val Settings = AppDrawerScreen("Settings", "⚙️")
+    }
 }
 
 @Composable
 fun TeachGrowScreen(
-    entries: List<Any> = emptyList(),
-    onAddEntry: (Any) -> Unit = {},
-    onUpdateEntry: (Any) -> Unit = {},
+    entries: List<TeachGrowEntry> = emptyList(),
+    onAddEntry: (String, String, String) -> Unit = { _, _, _ -> },
+    onUpdateEntry: (TeachGrowEntry) -> Unit = {},
     onDeleteEntry: (String) -> Unit = {},
-    onArchiveEntry: (String) -> Unit = {},
-    onPinEntry: (String) -> Unit = {},
+    onArchiveEntry: (String, Boolean) -> Unit = { _, _ -> },
+    onPinEntry: (String, Boolean) -> Unit = { _, _ -> },
     onReviewEntry: (String) -> Unit = {},
     onExportJson: () -> Unit = {},
     modifier: Modifier = Modifier
