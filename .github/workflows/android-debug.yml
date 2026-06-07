@@ -24,15 +24,10 @@ jobs:
       with:
         gradle-version: 8.9
 
-    - name: Make gradlew executable if present (for future)
-      run: chmod +x gradlew || true
-
-    - name: Run preflight safety check (non-blocking)
+    - name: Run preflight safety check
       run: |
-        if [ -f "scripts/preflight_check.sh" ]; then
-          chmod +x scripts/preflight_check.sh || true
-          ./scripts/preflight_check.sh || echo "Preflight warnings (non-blocking for now)"
-        fi
+        chmod +x scripts/preflight_check.sh || true
+        ./scripts/preflight_check.sh || echo "Preflight warnings (non-blocking for v7)"
 
     - name: Assemble Debug APK
       run: gradle assembleDebug --stacktrace
