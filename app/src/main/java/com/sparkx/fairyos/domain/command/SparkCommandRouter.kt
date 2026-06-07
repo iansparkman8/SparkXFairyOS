@@ -72,7 +72,6 @@ class SparkCommandRouter(
                 }
             }
             cmd.contains("set timer") || cmd.contains("timer for") -> {
-                // Extract minutes if possible, default 5
                 val minutes = Regex("""(\d+)""").find(cmd)?.groupValues?.get(1)?.toIntOrNull() ?: 5
                 if (isOwnerMode) {
                     CommandResult(
@@ -85,6 +84,81 @@ class SparkCommandRouter(
                     CommandResult("Owner Mode is required for setting timers. Enable it in Settings.", SparkMood.ALERT)
                 }
             }
+
+            // === SELF-UPGRADE MEMORY CORE ===
+            isSelfUpgradeCommand(cmd) -> {
+                val note = extractSelfUpgradeText(raw)
+                val entryType = classifySelfUpgradeType(cmd)
+
+                if (note.isBlank()) {
+                    CommandResult(
+                        "Tell me the upgrade, bug, or feature idea you want me to remember.",
+                        SparkMood.THINKING
+                    )
+                } else {
+                    kotlinx.coroutines.runBlocking {
+                        teachGrowRepo.addEntry(
+                            TeachGrowEntry(
+                                title = when (entryType) {
+                                    "bug" -> "Bug Report"
+                                    "feature" -> "Feature Request"
+                                    "system" -> "System Note"
+                                    else -> "Self-Upgrade Task"
+                                },
+                                content = note,
+                                type = entryType,
+                                summary = note.take(180),
+                                tags = listOf("spark-baby", "self-upgrade", entryType),
+                                priority = selfUpgradePriority(note),
+                                source = "voice_or_command"
+                            )
+                        )
+                    }
+
+                    onMoodChange(SparkMood.HAPPY)
+                    CommandResult(
+                        "Saved. I added that to my self-upgrade memory.",
+                        SparkMood.HAPPY
+                    )
+                }
+            }
+
+            isSelfUpgradeQuery(cmd) -> {
+                val reply = kotlinx.coroutines.runBlocking {
+                    val all = teachGrowRepo.search(
+                        query = "",
+                        includeArchived = false
+                    )
+
+                    val upgrades = all
+                        .filter {
+                            it.type.equals("self-upgrade", true) ||
+                            it.type.equals("bug", true) ||
+                            it.type.equals("feature", true) ||
+                            it.type.equals("system", true)
+                        }
+                        .sortedWith(
+                            compareByDescending<TeachGrowEntry> { it.priority }
+                                .thenByDescending { it.updatedAt }
+                        )
+                        .take(5)
+
+                    if (upgrades.isEmpty()) {
+                        "No pending self-upgrades yet. Teach me one by saying: remember this improvement."
+                    } else {
+                        buildString {
+                            append("Pending self-upgrades: ")
+                            upgrades.forEachIndexed { index, entry ->
+                                append("${index + 1}. ${entry.title}: ${entry.content.take(70)}. ")
+                            }
+                        }
+                    }
+                }
+
+                onMoodChange(SparkMood.THINKING)
+                CommandResult(reply, SparkMood.THINKING)
+            }
+
             cmd.contains("remember this") || cmd.contains("save this") -> {
                 val note = raw.substringAfter("remember this", raw.substringAfter("save this", "")).trim()
                 if (note.isNotBlank()) {
@@ -107,17 +181,96 @@ class SparkCommandRouter(
                 CommandResult("For summarization, please enable a cloud AI provider in the AI Console and ask again. Or save the note in Teach & Grow.", SparkMood.THINKING)
             }
             else -> {
-                CommandResult("I heard: $raw. Try commands like 'open youtube', 'happy', 'remember this [note]', or enable cloud AI for deeper help.", SparkMood.IDLE)
+                CommandResult("I heard: $raw. Try commands like 'open youtube', 'happy', 'remember this [note]', 'remember this improvement', or enable cloud AI for deeper help.", SparkMood.IDLE)
             }
         }
+    }
+
+    // === SELF-UPGRADE MEMORY CORE HELPERS ===
+
+    private fun isSelfUpgradeCommand(cmd: String): Boolean {
+        return listOf(
+            "remember this improvement",
+            "log this bug",
+            "add upgrade idea",
+            "self upgrade note",
+            "feature request",
+            "upgrade task",
+            "improvement idea",
+            "bug report"
+        ).any { cmd.contains(it) }
+    }
+
+    private fun isSelfUpgradeQuery(cmd: String): Boolean {
+        return listOf(
+            "what upgrades are pending",
+            "show self upgrades",
+            "what bugs have i logged",
+            "what should you improve next",
+            "self upgrade status",
+            "pending upgrades"
+        ).any { cmd.contains(it) }
+    }
+
+    private fun extractSelfUpgradeText(raw: String): String {
+        val markers = listOf(
+            "remember this improvement:",
+            "remember this improvement",
+            "log this bug:",
+            "log this bug",
+            "add upgrade idea:",
+            "add upgrade idea",
+            "self upgrade note:",
+            "self upgrade note",
+            "feature request:",
+            "feature request",
+            "upgrade task:",
+            "upgrade task",
+            "improvement idea:",
+            "improvement idea",
+            "bug report:",
+            "bug report"
+        )
+
+        var cleaned = raw.trim()
+        markers.forEach { marker ->
+            cleaned = cleaned.replace(marker, "", ignoreCase = true).trim()
+        }
+        return cleaned.trim(':', ' ', '-', '—')
+    }
+
+    private fun classifySelfUpgradeType(cmd: String): String {
+        return when {
+            cmd.contains("bug") || cmd.contains("broken") || cmd.contains("crash") -> "bug"
+            cmd.contains("feature") -> "feature"
+            cmd.contains("system") -> "system"
+            else -> "self-upgrade"
+        }
+    }
+
+    private fun selfUpgradePriority(text: String): Int {
+        val urgentWords = listOf(
+            "crash",
+            "build failed",
+            "broken",
+            "won't open",
+            "wont open",
+            "security",
+            "permission",
+            "overlay",
+            "voice",
+            "apk",
+            "install"
+        )
+        return if (urgentWords.any { text.lowercase().contains(it) }) 3 else 2
     }
 
     private fun launchAppByName(name: String): Boolean {
         val pm = context.packageManager
         val mainIntent = Intent(Intent.ACTION_MAIN, null).addCategory(Intent.CATEGORY_LAUNCHER)
         val apps = pm.queryIntentActivities(mainIntent, 0)
-        val match = apps.firstOrNull { 
-            it.loadLabel(pm).toString().lowercase().contains(name) || 
+        val match = apps.firstOrNull {
+            it.loadLabel(pm).toString().lowercase().contains(name) ||
             it.activityInfo.packageName.lowercase().contains(name)
         }
         return if (match != null) {
