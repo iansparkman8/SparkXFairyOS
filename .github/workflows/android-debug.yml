@@ -24,22 +24,15 @@ jobs:
       with:
         gradle-version: 8.9
 
-    - name: Ensure Gradle wrapper (generate if missing or incomplete)
+    - name: Run preflight safety check (non-blocking)
       run: |
-        if [ ! -f "./gradlew" ] || [ ! -f "gradle/wrapper/gradle-wrapper.jar" ]; then
-          echo "⚠️  Gradle wrapper incomplete or missing in repository. Generating full wrapper with Gradle 8.9 (bin dist)..."
-          gradle wrapper --gradle-version 8.9 --distribution-type bin
-          chmod +x gradlew gradlew.bat || true
-          ls -la gradlew gradle/wrapper/ || true
+        if [ -f scripts/preflight_check.sh ]; then
+          chmod +x scripts/preflight_check.sh || true
+          ./scripts/preflight_check.sh || echo "Preflight warnings (non-blocking)"
         fi
 
-    - name: Run preflight safety check
-      run: |
-        chmod +x scripts/preflight_check.sh || true
-        ./scripts/preflight_check.sh || echo "Preflight warnings (non-blocking for v7)"
-
     - name: Assemble Debug APK
-      run: ./gradlew assembleDebug --stacktrace
+      run: gradle assembleDebug --stacktrace
 
     - name: Upload Debug APK artifact
       uses: actions/upload-artifact@v4
