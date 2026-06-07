@@ -382,14 +382,12 @@ fun SparkXApp(
                 NavigationBarItem(
                     selected = navController.currentDestination?.route == "apps",
                     onClick = { navController.navigate("apps") },
-                    icon = { Icon(Icons.Default.Apps, contentDescription = "Apps") },
-                    label = { Text("Apps") }
+                    icon = { Icon(Icons.Default.Apps, contentDescription = "Apps") }
                 )
                 NavigationBarItem(
                     selected = navController.currentDestination?.route == "teach",
                     onClick = { navController.navigate("teach") },
-                    icon = { Icon(Icons.Default.MenuBook, contentDescription = "Teach & Grow") },
-                    label = { Text("Teach") }
+                    icon = { Icon(Icons.Default.MenuBook, contentDescription = "Teach") }
                 )
                 NavigationBarItem(
                     selected = navController.currentDestination?.route == "ai",
@@ -433,7 +431,7 @@ fun SparkXApp(
                     onUpdateEntry = onUpdateTeachEntry,
                     onDeleteEntry = onDeleteTeachEntry,
                     onArchiveEntry = onArchiveTeachEntry,
-                    onPinEntry = onPinTeachEntry,
+                    onPinEntry = onPinEntry,
                     onReviewEntry = onReviewTeachEntry,
                     onExportJson = onExportTeachJson
                 )
@@ -473,20 +471,23 @@ fun SparkXHomeScreen(
     onAvatarTap: () -> Unit = {}
 ) {
     // ── Colours ───────────────────────────────────────────────────────────────
-    val bgTop       = Color(0xFF090A14)
-    val bgBottom    = Color(0xFF17112A)
-    val glass       = Color.White.copy(alpha = 0.07f)
-    val glassBorder = Color.White.copy(alpha = 0.12f)
-    val cyan        = Color(0xFF39D7FF)
-    val violet      = Color(0xFFB8A7FF)
-    val gold        = Color(0xFFFFD36E)
-    val textSoft    = Color(0xFFBDB6E8)
+    val bgTop       = Color(0xFF03050A)
+    val bgBottom    = Color(0xFF0B111A)
+    val glass       = Color(0xFF101722).copy(alpha = 0.84f)
+    val glassBorder = Color(0xFF7DD3FC).copy(alpha = 0.22f)
+    val cyan        = Color(0xFF7DD3FC)
+    val violet      = Color(0xFF3B82F6)
+    val gold        = Color(0xFFBFC7D5)
+    val textSoft    = Color(0xFFBFC7D5)
 
     val moodAccent = when (currentMood) {
-        SparkMood.HAPPY   -> gold
-        SparkMood.ALERT   -> Color(0xFFFF6B6B)
+        SparkMood.HAPPY -> Color(0xFFE5E7EB)
+        SparkMood.ALERT -> Color(0xFF60A5FA)
         SparkMood.THINKING -> cyan
-        else              -> violet
+        SparkMood.LISTENING -> Color(0xFF38BDF8)
+        SparkMood.SLEEPY -> Color(0xFF94A3B8)
+        SparkMood.SPEAKING -> Color(0xFF7DD3FC)
+        else -> violet
     }
 
     val statusText = when {
@@ -511,8 +512,8 @@ fun SparkXHomeScreen(
                         colors = listOf(
                             moodAccent.copy(alpha = 0.15f),
                             Color.Transparent
-                        )
-                    ),
+                    )
+                ),
                     shape = CircleShape
                 )
         )
@@ -522,7 +523,7 @@ fun SparkXHomeScreen(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp, vertical = 16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                horizontalAlignment = Alignment.CenterHorizontally
         ) {
 
             // ── Top status row ────────────────────────────────────────────────
