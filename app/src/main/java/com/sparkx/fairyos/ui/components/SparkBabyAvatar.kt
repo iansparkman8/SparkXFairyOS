@@ -22,7 +22,8 @@ fun SparkBabyAvatar(
     isSpeaking: Boolean,
     reactionKey: Int = 0,
     form: FairyForm = FairyForm.Androgynous,
-    visualIntensity: Float = 1f
+    visualIntensity: Float = 1f,
+    size: Dp = 220.dp
 ) {
     val fairyPalette = form.palette()
 
@@ -81,16 +82,18 @@ fun SparkBabyAvatar(
         label = "idleShimmer"
     )
 
-    Canvas(modifier = modifier.size(280.dp)) {
-        val cx = size.width / 2
-        val baseCy = size.height / 2 + 16f
+    Canvas(modifier = modifier.size(size)) {
+        val canvasSize = this.size
+
+        val cx = canvasSize.width / 2f
+        val baseCy = canvasSize.height / 2f + 16f
 
         // === Stronger organic breathing + body bob ===
         val breath = sin(phase * 0.92f) * 7.5f * visualIntensity
         val bodyBob = sin(phase * 0.75f) * 2.2f
         val cy = baseCy + breath + bodyBob
 
-        val s = size.width * 0.37f * reactionScale
+        val s = canvasSize.minDimension * 0.37f * reactionScale
 
         // === Aura (mood + speaking reactive) ===
         val auraIntensity = when {
