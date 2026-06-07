@@ -88,8 +88,8 @@ class SparkOverlayService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            width = dp(144)
-            height = dp(144)
+            width = dp(220)
+            height = dp(220)
         }
 
         params?.let { restoreOverlayPosition(it) }
