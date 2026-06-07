@@ -387,7 +387,211 @@ fun SparkXApp(
     }
 }
 
-// ==================== RESTORED SCREENS ====================
+// ==================== PREMIUM HOME SCREEN ====================
+
+@Composable
+fun SparkXHomeScreen(
+    currentMood: SparkMood,
+    isSpeaking: Boolean,
+    isOwnerMode: Boolean,
+    overlayVisible: Boolean,
+    commandInput: String,
+    onCommandInputChange: (String) -> Unit,
+    onSendCommand: (String) -> Unit,
+    onMicClick: () -> Unit,
+    onToggleOverlay: () -> Unit,
+    onToggleOwnerMode: () -> Unit,
+    onNavigateToApps: () -> Unit,
+    onNavigateToTeach: () -> Unit,
+    isListening: Boolean = false
+) {
+    val context = LocalContext.current
+
+    Box(modifier = Modifier.fillMaxSize().background(SparkGlass.BackgroundDark)) {
+        HoloBackground()
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 20.dp)
+                .padding(top = 24.dp, bottom = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Premium Glass Status Header
+            SparkGlassCard(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text("SparkX FairyOS", color = SparkGlass.Cyan, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                        Text(
+                            when {
+                                isOwnerMode -> "Owner Mode"
+                                else -> "Safe Local Mode"
+                            },
+                            color = Color(0xFF9C7BFF),
+                            fontSize = 13.sp
+                        )
+                    }
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        // Mood Chip
+                        Surface(
+                            color = when (currentMood) {
+                                SparkMood.HAPPY -> Color(0xFF7CFFB2).copy(alpha = 0.2f)
+                                SparkMood.ALERT -> Color(0xFFFF4D6D).copy(alpha = 0.2f)
+                                SparkMood.SLEEPY -> Color(0xFF9D7BFF).copy(alpha = 0.2f)
+                                else -> Color(0xFF00E5FF).copy(alpha = 0.2f)
+                            },
+                            shape = RoundedCornerShape(50)
+                        ) {
+                            Text(
+                                currentMood.name,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                                color = when (currentMood) {
+                                    SparkMood.HAPPY -> Color(0xFF7CFFB2)
+                                    SparkMood.ALERT -> Color(0xFFFF4D6D)
+                                    SparkMood.SLEEPY -> Color(0xFF9D7BFF)
+                                    else -> Color(0xFF00E5FF)
+                                },
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+
+                        if (overlayVisible) {
+                            Surface(
+                                color = SparkGlass.Cyan.copy(alpha = 0.2f),
+                                shape = RoundedCornerShape(50)
+                            ) {
+                                Text("Overlay", modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp), color = SparkGlass.Cyan, fontSize = 11.sp)
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(32.dp))
+
+            // Hero Avatar Section
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.size(280.dp)
+            ) {
+                SparkBabyAvatar(
+                    mood = currentMood,
+                    isSpeaking = isSpeaking,
+                    size = 260.dp
+                )
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            Text(
+                when (currentMood) {
+                    SparkMood.SPEAKING -> "Speaking..."
+                    SparkMood.LISTENING -> "Listening..."
+                    else -> "Spark Baby is ${currentMood.name.lowercase()}"
+                },
+                color = Color(0xFF9C7BFF),
+                fontSize = 15.sp
+            )
+
+            Spacer(Modifier.height(28.dp))
+
+            // Premium Command Bar
+            SparkGlassCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(64.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = commandInput,
+                        onValueChange = onCommandInputChange,
+                        placeholder = { Text("Talk to Spark Baby...", color = Color(0xFF888888)) },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = SparkGlass.Cyan,
+                            unfocusedBorderColor = SparkGlass.Stroke,
+                            cursorColor = SparkGlass.Cyan,
+                            focusedTextColor = Color.White
+                        ),
+                        textStyle = LocalTextStyle.current.copy(color = Color.White)
+                    )
+
+                    Spacer(Modifier.width(8.dp))
+
+                    IconButton(onClick = onMicClick) {
+                        Icon(
+                            if (isListening) Icons.Default.MicOff else Icons.Default.Mic,
+                            contentDescription = "Voice",
+                            tint = if (isListening) SparkGlass.Pink else SparkGlass.Cyan
+                        )
+                    }
+
+                    IconButton(onClick = { onSendCommand(commandInput) }) {
+                        Icon(Icons.Default.Send, contentDescription = "Send", tint = SparkGlass.Cyan)
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(24.dp))
+
+            // Quick Action Grid
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(3),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                item {
+                    QuickActionButton("Show Bubble", Icons.Default.BubbleChart) { onToggleOverlay() }
+                }
+                item {
+                    QuickActionButton("Teach & Grow", Icons.Default.MenuBook) { onNavigateToTeach() }
+                }
+                item {
+                    QuickActionButton("Permissions", Icons.Default.Security) { /* TODO */ }
+                }
+                item {
+                    QuickActionButton("AI Console", Icons.Default.AutoAwesome) { /* TODO */ }
+                }
+                item {
+                    QuickActionButton("Mars Mode", Icons.Default.Public) { /* TODO */ }
+                }
+                item {
+                    QuickActionButton("Settings", Icons.Default.Settings) { /* TODO */ }
+                }
+            }
+
+            Spacer(Modifier.weight(1f))
+
+            // Bottom Dock
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(SparkGlass.PanelStrong)
+                    .padding(vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                DockButton("Phone", "com.android.dialer", context)
+                DockButton("Messages", "com.google.android.apps.messaging", context)
+                DockButton("Camera", "com.android.camera2", context)
+                DockButton("Browser", "com.android.chrome", context)
+                DockButton("Spark", "com.sparkx.fairyos", context)
+            }
+        }
+    }
+}
+
+// ==================== OTHER SCREENS ====================
 
 @Composable
 fun AppDrawerScreen(onLaunchApp: (String) -> Unit) {
@@ -455,7 +659,6 @@ fun TeachGrowScreen(
             colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = SparkGlass.Cyan)
         )
 
-        // Simple type filter
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 12.dp)) {
             listOf("All", "lesson", "code", "memory", "behavior", "self-upgrade", "bug", "feature").forEach { type ->
                 FilterChip(
@@ -471,8 +674,8 @@ fun TeachGrowScreen(
                 TeachEntryCard(
                     entry = entry,
                     onDelete = { onDeleteEntry(entry.id) },
-                    onArchive = { onArchiveEntry(entry.id, !entry.archived) },
-                    onPin = { onPinEntry(entry.id, !entry.pinned) },
+                    onArchive = { onArchiveEntry(entry.id, !entry.isArchived) },
+                    onPin = { onPinEntry(entry.id, !entry.isPinned) },
                     onReview = { onReviewEntry(entry.id) }
                 )
             }
@@ -506,8 +709,8 @@ fun TeachEntryCard(
             }
             Text(entry.content.take(120), color = Color(0xFFCCCCCC), fontSize = 13.sp, maxLines = 3)
             Row {
-                TextButton(onClick = onPin) { Text(if (entry.pinned) "Unpin" else "Pin") }
-                TextButton(onClick = onArchive) { Text(if (entry.archived) "Unarchive" else "Archive") }
+                TextButton(onClick = onPin) { Text(if (entry.isPinned) "Unpin" else "Pin") }
+                TextButton(onClick = onArchive) { Text(if (entry.isArchived) "Unarchive" else "Archive") }
                 TextButton(onClick = onDelete) { Text("Delete", color = SparkGlass.Danger) }
             }
         }
@@ -531,7 +734,6 @@ fun TeachEntryEditorDialog(onDismiss: () -> Unit, onSave: (String, String, Strin
             Column {
                 OutlinedTextField(value = title, onValueChange = { title = it }, placeholder = { Text("Title") })
                 OutlinedTextField(value = content, onValueChange = { content = it }, placeholder = { Text("Content") })
-                // Simple type selector
             }
         }
     )
