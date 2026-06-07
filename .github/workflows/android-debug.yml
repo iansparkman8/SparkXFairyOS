@@ -29,10 +29,8 @@ jobs:
         chmod +x scripts/preflight_check.sh || true
         ./scripts/preflight_check.sh || echo "Preflight warnings (non-blocking for v7)"
 
-    - name: Assemble Debug APK
-      run: |
-        chmod +x gradlew
-        ./gradlew clean assembleDebug --stacktrace
+    - name: Build debug APK
+      run: gradle clean assembleDebug --stacktrace
 
     - name: Upload Debug APK artifact
       uses: actions/upload-artifact@v4
