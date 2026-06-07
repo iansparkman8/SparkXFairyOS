@@ -1059,11 +1059,7 @@ fun TeachEntryEditorDialog(
 
 @Composable
 fun TemplateButtons(
-    onTemplate = { templateTitle, templateContent, templateType ->
-        if (title.isBlank()) title = templateTitle
-        if (content.isBlank()) content = templateContent
-        type = templateType
-    }
+    onTemplate: (templateTitle: String, templateContent: String, templateType: String) -> Unit
 ) {
     Column {
         Text("Quick templates", color = Color.White, fontWeight = FontWeight.Bold)
