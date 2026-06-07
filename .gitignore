@@ -1,7 +1,7 @@
 # Built application files
 *.apk
-*.aab
 *.ap_
+*.aab
 
 # Files for the ART/Dalvik VM
 *.dex
@@ -13,7 +13,6 @@
 bin/
 gen/
 out/
-release/
 
 # Gradle files
 .gradle/
@@ -36,17 +35,7 @@ captures/
 
 # IntelliJ
 *.iml
-.idea/workspace.xml
-.idea/tasks.xml
-.idea/gradle.xml
-.idea/assetWizardSettings.xml
-.idea/dictionaries
-.idea/libraries
-# Android Studio 3 in .gitignore file.
-.idea/caches
-.idea/modules.xml
-# Comment next line if keeping position of elements in Navigation Editor is relevant for you
-.idea/navEditor.xml
+.idea/
 
 # Keystore files
 # Uncomment the following lines if you do not want to check your keystore files in.
@@ -58,7 +47,7 @@ captures/
 .cxx/
 
 # Google Services (e.g. APIs or Firebase)
-# google-services.json
+google-services.json
 
 # Freeline
 freeline.py
@@ -70,20 +59,16 @@ fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots
 fastlane/test_output
-fastlane/readme.md
 
-# Version control
-vcs.xml
-
-# lint
-lint/intermediates/
-lint/generated/
-lint/outputs/
-lint/tmp/
-lint/reports/
+# Bundle tool
+*.aab
 
 # MacOS
 .DS_Store
 
-# Ignore Gradle wrapper jar (we generate in CI if needed)
-gradle/wrapper/gradle-wrapper.jar
+# Win
+Thumbs.db
+
+# Spark specific
+*.tmp
+sparkx_fairy_memory.json
