@@ -19,7 +19,9 @@ class SparkCommandRouter(
     private val onMoodChange: (SparkMood) -> Unit,
     private val onSpeak: (String) -> Unit,
     private val onShowOverlay: () -> Unit,
-    private val onHideOverlay: () -> Unit
+    private val onHideOverlay: () -> Unit,
+    private val onGrowthEntryLogged: ((String) -> Unit)? = null,
+    private val getGrowthSummary: (() -> String)? = null
 ) {
 
     data class CommandResult(
@@ -32,6 +34,7 @@ class SparkCommandRouter(
 
     fun processCommand(raw: String, isOwnerMode: Boolean): CommandResult {
         val cmd = raw.lowercase().trim()
+        val clean = cmd
 
         return when {
             cmd.contains("hello") || cmd.contains("hi spark") -> {
@@ -113,6 +116,7 @@ class SparkCommandRouter(
                                 source = "voice_or_command"
                             )
                         )
+                        onGrowthEntryLogged?.invoke(entryType)
                     }
 
                     onMoodChange(SparkMood.HAPPY)
@@ -159,11 +163,23 @@ class SparkCommandRouter(
                 CommandResult(reply, SparkMood.THINKING)
             }
 
+            // === GROWTH / PERSONALITY QUERIES (safe, read-only) ===
+            clean == "what form are you?" ||
+            clean == "what are your traits?" ||
+            clean == "what is your bond level?" ||
+            clean == "what have you learned?" ||
+            clean == "growth status" -> {
+                val summary = getGrowthSummary?.invoke()
+                    ?: "My growth memory is still waking up. Give me a moment."
+                CommandResult(summary, SparkMood.HAPPY)
+            }
+
             cmd.contains("remember this") || cmd.contains("save this") -> {
                 val note = raw.substringAfter("remember this", raw.substringAfter("save this", "")).trim()
                 if (note.isNotBlank()) {
                     kotlinx.coroutines.runBlocking {
                         teachGrowRepo.addEntry(TeachGrowEntry(title = "Quick Memory", content = note, type = "memory"))
+                        onGrowthEntryLogged?.invoke("memory")
                     }
                     CommandResult("Saved to Teach & Grow as memory.", SparkMood.HAPPY)
                 } else CommandResult("What would you like to remember?", SparkMood.THINKING)
@@ -173,6 +189,7 @@ class SparkCommandRouter(
                 if (lesson.isNotBlank()) {
                     kotlinx.coroutines.runBlocking {
                         teachGrowRepo.addEntry(TeachGrowEntry(title = "Lesson", content = lesson, type = "lesson"))
+                        onGrowthEntryLogged?.invoke("lesson")
                     }
                     CommandResult("Added to Teach & Grow. Thank you for teaching me!", SparkMood.HAPPY)
                 } else CommandResult("Tell me what to learn.", SparkMood.THINKING)
@@ -181,12 +198,12 @@ class SparkCommandRouter(
                 CommandResult("For summarization, please enable a cloud AI provider in the AI Console and ask again. Or save the note in Teach & Grow.", SparkMood.THINKING)
             }
             else -> {
-                CommandResult("I heard: $raw. Try commands like 'open youtube', 'happy', 'remember this [note]', 'remember this improvement', or enable cloud AI for deeper help.", SparkMood.IDLE)
+                CommandResult("I heard: $raw. Try commands like 'open youtube', 'happy', 'remember this improvement', or ask me about my forms and growth.", SparkMood.IDLE)
             }
         }
     }
 
-    // === SELF-UPGRADE MEMORY CORE HELPERS ===
+    // === SELF-UPGRADE MEMORY CORE HELPERS (unchanged) ===
 
     private fun isSelfUpgradeCommand(cmd: String): Boolean {
         return listOf(
