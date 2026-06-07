@@ -24,10 +24,10 @@ jobs:
       with:
         gradle-version: 8.9
 
-    - name: Ensure Gradle wrapper (generate if missing)
+    - name: Ensure Gradle wrapper (generate if missing or incomplete)
       run: |
-        if [ ! -f "./gradlew" ]; then
-          echo "⚠️  Gradle wrapper not found in repository root. Generating now with Gradle 8.9..."
+        if [ ! -f "./gradlew" ] || [ ! -f "gradle/wrapper/gradle-wrapper.jar" ]; then
+          echo "⚠️  Gradle wrapper incomplete or missing in repository. Generating full wrapper with Gradle 8.9 (bin dist)..."
           gradle wrapper --gradle-version 8.9 --distribution-type bin
           chmod +x gradlew gradlew.bat || true
           ls -la gradlew gradle/wrapper/ || true
