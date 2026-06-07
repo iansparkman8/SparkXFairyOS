@@ -406,6 +406,7 @@ fun SparkXApp(
                     isListening = isListening,
                     avatarPulseKey = avatarPulseKey,
                     onAvatarTap = {
+                        // currentMood is a read-only parameter here; parent state owns mood changes
                         avatarPulseKey++
                     }
                 )
