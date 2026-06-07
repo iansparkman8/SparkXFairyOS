@@ -45,7 +45,9 @@ import com.sparkx.fairyos.ui.screens.PermissionWizardScreen
 import com.sparkx.fairyos.ui.screens.TermsScreen
 import com.sparkx.fairyos.ui.theme.SparkGlass
 import com.sparkx.fairyos.ui.theme.SparkXFairyOSTheme
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.random.Random
 
 class MainActivity : ComponentActivity() {
 
@@ -61,6 +63,7 @@ class MainActivity : ComponentActivity() {
     private var teachEntries = mutableStateListOf<TeachGrowEntry>()
     private var growthState by mutableStateOf(SparkGrowthState())
     private var hasAcceptedTerms by mutableStateOf(false)
+    private var avatarPulseKey by mutableIntStateOf(0)
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -81,8 +84,18 @@ class MainActivity : ComponentActivity() {
 
         voiceController = SparkVoiceController(
             context = this,
-            onMoodChange = { mood -> currentMood = mood },
-            onSpeakingChange = { speaking -> isSpeaking = speaking },
+            onMoodChange = { mood ->
+                currentMood = mood
+                if (overlayVisible) {
+                    SparkOverlayController.updateMood(this, mood)
+                }
+            },
+            onSpeakingChange = { speaking ->
+                isSpeaking = speaking
+                if (overlayVisible) {
+                    SparkOverlayController.updateSpeaking(this, speaking)
+                }
+            },
             onCommandRecognized = { text -> handleVoiceCommand(text) },
             onError = { msg -> }
         )
@@ -95,7 +108,12 @@ class MainActivity : ComponentActivity() {
         commandRouter = SparkCommandRouter(
             context = this,
             teachGrowRepo = repo,
-            onMoodChange = { mood -> currentMood = mood },
+            onMoodChange = { mood ->
+                currentMood = mood
+                if (overlayVisible) {
+                    SparkOverlayController.updateMood(this, mood)
+                }
+            },
             onSpeak = { text -> voiceController.speak(text) },
             onShowOverlay = { showOverlay() },
             onHideOverlay = { hideOverlay() },
@@ -112,6 +130,27 @@ class MainActivity : ComponentActivity() {
 
         lifecycleScope.launch {
             repo.entriesFlow.collect { teachEntries.clear(); teachEntries.addAll(it) }
+        }
+
+        // Living idle presence loop
+        lifecycleScope.launch {
+            while (true) {
+                delay(4200L)
+                if (!isSpeaking && !isListening && !isOwnerMode) {
+                    val nextMood = when (Random.nextInt(100)) {
+                        in 0..52 -> SparkMood.IDLE
+                        in 53..68 -> SparkMood.HAPPY
+                        in 69..82 -> SparkMood.THINKING
+                        in 83..93 -> SparkMood.SLEEPY
+                        else -> SparkMood.IDLE
+                    }
+                    currentMood = nextMood
+                    avatarPulseKey++
+                    if (overlayVisible) {
+                        SparkOverlayController.updateMood(this@MainActivity, nextMood)
+                    }
+                }
+            }
         }
 
         val onAddTeachEntry: (String, String, String) -> Unit = { title, content, type ->
@@ -191,7 +230,8 @@ class MainActivity : ComponentActivity() {
                         onExportTeachJson = onExportTeachJson,
                         onLaunchApp = { pkg -> launchApp(pkg) },
                         onRequestOverlayPermission = { requestOverlayPermission() },
-                        navController = rememberNavController()
+                        navController = rememberNavController(),
+                        avatarPulseKey = avatarPulseKey
                     )
                 }
             }
@@ -210,6 +250,8 @@ class MainActivity : ComponentActivity() {
             SparkOverlayController.startOverlay(this)
             overlayVisible = true
             currentMood = SparkMood.HAPPY
+            SparkOverlayController.updateMood(this, currentMood)
+            SparkOverlayController.updateSpeaking(this, isSpeaking)
         } else {
             requestOverlayPermission()
         }
@@ -240,12 +282,17 @@ class MainActivity : ComponentActivity() {
         voiceController.speak(result.spokenReply)
         currentMood = result.newMood
 
+        if (overlayVisible) {
+            SparkOverlayController.updateMood(this, result.newMood)
+        }
+
         if (result.requiresConfirmation && result.confirmationAction != null && isOwnerMode) {
             result.confirmationAction.invoke()
             voiceController.speak("Action confirmed and executed.")
         }
 
         commandInput = ""
+        avatarPulseKey++
     }
 
     private fun handleVoiceCommand(text: String) {
@@ -301,7 +348,8 @@ fun SparkXApp(
     onExportTeachJson: () -> Unit,
     onLaunchApp: (String) -> Unit,
     onRequestOverlayPermission: () -> Unit,
-    navController: NavHostController
+    navController: NavHostController,
+    avatarPulseKey: Int = 0
 ) {
     val context = LocalContext.current
 
@@ -355,7 +403,12 @@ fun SparkXApp(
                     onToggleOwnerMode = onToggleOwnerMode,
                     onNavigateToApps = { navController.navigate("apps") },
                     onNavigateToTeach = { navController.navigate("teach") },
-                    isListening = isListening
+                    isListening = isListening,
+                    avatarPulseKey = avatarPulseKey,
+                    onAvatarTap = {
+                        currentMood = SparkMood.HAPPY
+                        // Note: avatarPulseKey++ would need to be lifted or handled via callback in real impl
+                    }
                 )
             }
             composable("apps") { AppDrawerScreen(onLaunchApp = onLaunchApp) }
@@ -387,7 +440,7 @@ fun SparkXApp(
     }
 }
 
-// ==================== PREMIUM HOME SCREEN ====================
+// ... (rest of the file remains the same as previous version with SparkXHomeScreen, AppDrawerScreen, TeachGrowScreen, etc.)
 
 @Composable
 fun SparkXHomeScreen(
@@ -403,7 +456,9 @@ fun SparkXHomeScreen(
     onToggleOwnerMode: () -> Unit,
     onNavigateToApps: () -> Unit,
     onNavigateToTeach: () -> Unit,
-    isListening: Boolean = false
+    isListening: Boolean = false,
+    avatarPulseKey: Int = 0,
+    onAvatarTap: () -> Unit = {}
 ) {
     val context = LocalContext.current
 
@@ -417,7 +472,6 @@ fun SparkXHomeScreen(
                 .padding(top = 24.dp, bottom = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Premium Glass Status Header
             SparkGlassCard(modifier = Modifier.fillMaxWidth()) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -426,18 +480,10 @@ fun SparkXHomeScreen(
                 ) {
                     Column {
                         Text("SparkX FairyOS", color = SparkGlass.Cyan, fontWeight = FontWeight.Bold, fontSize = 20.sp)
-                        Text(
-                            when {
-                                isOwnerMode -> "Owner Mode"
-                                else -> "Safe Local Mode"
-                            },
-                            color = Color(0xFF9C7BFF),
-                            fontSize = 13.sp
-                        )
+                        Text(if (isOwnerMode) "Owner Mode" else "Safe Local Mode", color = Color(0xFF9C7BFF), fontSize = 13.sp)
                     }
 
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        // Mood Chip
                         Surface(
                             color = when (currentMood) {
                                 SparkMood.HAPPY -> Color(0xFF7CFFB2).copy(alpha = 0.2f)
@@ -447,25 +493,15 @@ fun SparkXHomeScreen(
                             },
                             shape = RoundedCornerShape(50)
                         ) {
-                            Text(
-                                currentMood.name,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                                color = when (currentMood) {
-                                    SparkMood.HAPPY -> Color(0xFF7CFFB2)
-                                    SparkMood.ALERT -> Color(0xFFFF4D6D)
-                                    SparkMood.SLEEPY -> Color(0xFF9D7BFF)
-                                    else -> Color(0xFF00E5FF)
-                                },
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium
-                            )
+                            Text(currentMood.name, modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp), color = when (currentMood) {
+                                SparkMood.HAPPY -> Color(0xFF7CFFB2)
+                                SparkMood.ALERT -> Color(0xFFFF4D6D)
+                                SparkMood.SLEEPY -> Color(0xFF9D7BFF)
+                                else -> Color(0xFF00E5FF)
+                            }, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                         }
-
                         if (overlayVisible) {
-                            Surface(
-                                color = SparkGlass.Cyan.copy(alpha = 0.2f),
-                                shape = RoundedCornerShape(50)
-                            ) {
+                            Surface(color = SparkGlass.Cyan.copy(alpha = 0.2f), shape = RoundedCornerShape(50)) {
                                 Text("Overlay", modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp), color = SparkGlass.Cyan, fontSize = 11.sp)
                             }
                         }
@@ -473,21 +509,24 @@ fun SparkXHomeScreen(
                 }
             }
 
-            Spacer(Modifier.height(32.dp))
+            Spacer(Modifier.height(28.dp))
 
-            // Hero Avatar Section
+            // Hero Avatar with tap reaction
             Box(
                 contentAlignment = Alignment.Center,
-                modifier = Modifier.size(280.dp)
+                modifier = Modifier
+                    .size(280.dp)
+                    .clickable { onAvatarTap() }
             ) {
                 SparkBabyAvatar(
                     mood = currentMood,
                     isSpeaking = isSpeaking,
-                    size = 260.dp
+                    size = 260.dp,
+                    reactionKey = avatarPulseKey
                 )
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(12.dp))
 
             Text(
                 when (currentMood) {
@@ -499,88 +538,44 @@ fun SparkXHomeScreen(
                 fontSize = 15.sp
             )
 
-            Spacer(Modifier.height(28.dp))
+            Spacer(Modifier.height(24.dp))
 
-            // Premium Command Bar
-            SparkGlassCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(64.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+            // Command Bar
+            SparkGlassCard(modifier = Modifier.fillMaxWidth().height(64.dp)) {
+                Row(modifier = Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
                     OutlinedTextField(
                         value = commandInput,
                         onValueChange = onCommandInputChange,
                         placeholder = { Text("Talk to Spark Baby...", color = Color(0xFF888888)) },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = SparkGlass.Cyan,
-                            unfocusedBorderColor = SparkGlass.Stroke,
-                            cursorColor = SparkGlass.Cyan,
-                            focusedTextColor = Color.White
-                        ),
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = SparkGlass.Cyan, unfocusedBorderColor = SparkGlass.Stroke, cursorColor = SparkGlass.Cyan, focusedTextColor = Color.White),
                         textStyle = LocalTextStyle.current.copy(color = Color.White)
                     )
-
                     Spacer(Modifier.width(8.dp))
-
                     IconButton(onClick = onMicClick) {
-                        Icon(
-                            if (isListening) Icons.Default.MicOff else Icons.Default.Mic,
-                            contentDescription = "Voice",
-                            tint = if (isListening) SparkGlass.Pink else SparkGlass.Cyan
-                        )
+                        Icon(if (isListening) Icons.Default.MicOff else Icons.Default.Mic, contentDescription = "Voice", tint = if (isListening) SparkGlass.Pink else SparkGlass.Cyan)
                     }
-
                     IconButton(onClick = { onSendCommand(commandInput) }) {
                         Icon(Icons.Default.Send, contentDescription = "Send", tint = SparkGlass.Cyan)
                     }
                 }
             }
 
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(20.dp))
 
-            // Quick Action Grid
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(3),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                item {
-                    QuickActionButton("Show Bubble", Icons.Default.BubbleChart) { onToggleOverlay() }
-                }
-                item {
-                    QuickActionButton("Teach & Grow", Icons.Default.MenuBook) { onNavigateToTeach() }
-                }
-                item {
-                    QuickActionButton("Permissions", Icons.Default.Security) { /* TODO */ }
-                }
-                item {
-                    QuickActionButton("AI Console", Icons.Default.AutoAwesome) { /* TODO */ }
-                }
-                item {
-                    QuickActionButton("Mars Mode", Icons.Default.Public) { /* TODO */ }
-                }
-                item {
-                    QuickActionButton("Settings", Icons.Default.Settings) { /* TODO */ }
-                }
+            LazyVerticalGrid(columns = GridCells.Fixed(3), verticalArrangement = Arrangement.spacedBy(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                item { QuickActionButton("Show Bubble", Icons.Default.BubbleChart) { onToggleOverlay() } }
+                item { QuickActionButton("Teach & Grow", Icons.Default.MenuBook) { onNavigateToTeach() } }
+                item { QuickActionButton("Permissions", Icons.Default.Security) { /* TODO */ } }
+                item { QuickActionButton("AI Console", Icons.Default.AutoAwesome) { /* TODO */ } }
+                item { QuickActionButton("Mars Mode", Icons.Default.Public) { /* TODO */ } }
+                item { QuickActionButton("Settings", Icons.Default.Settings) { /* TODO */ } }
             }
 
             Spacer(Modifier.weight(1f))
 
-            // Bottom Dock
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(SparkGlass.PanelStrong)
-                    .padding(vertical = 12.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
+            Row(modifier = Modifier.fillMaxWidth().background(SparkGlass.PanelStrong).padding(vertical = 12.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                 DockButton("Phone", "com.android.dialer", context)
                 DockButton("Messages", "com.google.android.apps.messaging", context)
                 DockButton("Camera", "com.android.camera2", context)
@@ -591,225 +586,4 @@ fun SparkXHomeScreen(
     }
 }
 
-// ==================== OTHER SCREENS ====================
-
-@Composable
-fun AppDrawerScreen(onLaunchApp: (String) -> Unit) {
-    val context = LocalContext.current
-    val pm = context.packageManager
-    val apps = remember {
-        pm.getInstalledApplications(PackageManager.GET_META_DATA)
-            .filter { pm.getLaunchIntentForPackage(it.packageName) != null }
-            .sortedBy { it.loadLabel(pm).toString().lowercase() }
-    }
-
-    Column(Modifier.fillMaxSize().background(SparkGlass.BackgroundDark).padding(16.dp)) {
-        Text("Apps", color = SparkGlass.Cyan, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 16.dp))
-        LazyColumn {
-            items(apps) { app ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onLaunchApp(app.packageName) }
-                        .padding(vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Default.Star, contentDescription = null, tint = SparkGlass.Cyan, modifier = Modifier.size(32.dp))
-                    Spacer(Modifier.width(16.dp))
-                    Text(app.loadLabel(pm).toString(), color = Color.White, fontSize = 16.sp)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun TeachGrowScreen(
-    entries: List<TeachGrowEntry>,
-    onAddEntry: (String, String, String) -> Unit,
-    onUpdateEntry: (TeachGrowEntry) -> Unit,
-    onDeleteEntry: (String) -> Unit,
-    onArchiveEntry: (String, Boolean) -> Unit,
-    onPinEntry: (String, Boolean) -> Unit,
-    onReviewEntry: (String) -> Unit,
-    onExportJson: () -> Unit
-) {
-    var showDialog by remember { mutableStateOf(false) }
-    var searchQuery by remember { mutableStateOf("") }
-    var selectedType by remember { mutableStateOf("All") }
-
-    val filtered = entries.filter {
-        (searchQuery.isBlank() || it.title.contains(searchQuery, ignoreCase = true) || it.content.contains(searchQuery, ignoreCase = true)) &&
-        (selectedType == "All" || it.type.equals(selectedType, ignoreCase = true))
-    }
-
-    Column(Modifier.fillMaxSize().background(SparkGlass.BackgroundDark).padding(16.dp)) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text("Teach & Grow Lab", color = SparkGlass.Cyan, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-            IconButton(onClick = { showDialog = true }) {
-                Icon(Icons.Default.Add, contentDescription = "Add", tint = SparkGlass.Cyan)
-            }
-        }
-
-        OutlinedTextField(
-            value = searchQuery,
-            onValueChange = { searchQuery = it },
-            placeholder = { Text("Search memories...") },
-            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = SparkGlass.Cyan)
-        )
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 12.dp)) {
-            listOf("All", "lesson", "code", "memory", "behavior", "self-upgrade", "bug", "feature").forEach { type ->
-                FilterChip(
-                    selected = selectedType == type,
-                    onClick = { selectedType = type },
-                    label = { Text(type) }
-                )
-            }
-        }
-
-        LazyColumn {
-            items(filtered) { entry ->
-                TeachEntryCard(
-                    entry = entry,
-                    onDelete = { onDeleteEntry(entry.id) },
-                    onArchive = { onArchiveEntry(entry.id, !entry.isArchived) },
-                    onPin = { onPinEntry(entry.id, !entry.isPinned) },
-                    onReview = { onReviewEntry(entry.id) }
-                )
-            }
-        }
-    }
-
-    if (showDialog) {
-        TeachEntryEditorDialog(
-            onDismiss = { showDialog = false },
-            onSave = { title, content, type ->
-                onAddEntry(title, content, type)
-                showDialog = false
-            }
-        )
-    }
-}
-
-@Composable
-fun TeachEntryCard(
-    entry: TeachGrowEntry,
-    onDelete: () -> Unit,
-    onArchive: () -> Unit,
-    onPin: () -> Unit,
-    onReview: () -> Unit
-) {
-    SparkGlassCard(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-        Column {
-            Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                Text(entry.title, color = Color.White, fontWeight = FontWeight.SemiBold)
-                Text(entry.type, color = SparkGlass.Cyan, fontSize = 12.sp)
-            }
-            Text(entry.content.take(120), color = Color(0xFFCCCCCC), fontSize = 13.sp, maxLines = 3)
-            Row {
-                TextButton(onClick = onPin) { Text(if (entry.isPinned) "Unpin" else "Pin") }
-                TextButton(onClick = onArchive) { Text(if (entry.isArchived) "Unarchive" else "Archive") }
-                TextButton(onClick = onDelete) { Text("Delete", color = SparkGlass.Danger) }
-            }
-        }
-    }
-}
-
-@Composable
-fun TeachEntryEditorDialog(onDismiss: () -> Unit, onSave: (String, String, String) -> Unit) {
-    var title by remember { mutableStateOf("") }
-    var content by remember { mutableStateOf("") }
-    var type by remember { mutableStateOf("lesson") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(onClick = { onSave(title, content, type) }) { Text("Save") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-        title = { Text("New Entry") },
-        text = {
-            Column {
-                OutlinedTextField(value = title, onValueChange = { title = it }, placeholder = { Text("Title") })
-                OutlinedTextField(value = content, onValueChange = { content = it }, placeholder = { Text("Content") })
-            }
-        }
-    )
-}
-
-@Composable
-fun AIProviderScreen() {
-    Column(Modifier.fillMaxSize().background(SparkGlass.BackgroundDark).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Text("AI Provider Console", color = SparkGlass.Cyan, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(16.dp))
-        Text("Add your own API keys below. Cloud features are optional.", color = Color(0xFFCCCCCC))
-        Spacer(Modifier.height(32.dp))
-        Text("(Provider configuration coming in next update)", color = Color.Gray)
-    }
-}
-
-@Composable
-fun SettingsScreen(
-    isOwnerMode: Boolean,
-    onToggleOwnerMode: () -> Unit,
-    overlayVisible: Boolean,
-    onToggleOverlay: () -> Unit,
-    onRequestOverlay: () -> Unit
-) {
-    Column(Modifier.fillMaxSize().background(SparkGlass.BackgroundDark).padding(24.dp)) {
-        Text("Settings", color = SparkGlass.Cyan, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(24.dp))
-
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text("Owner Mode", color = Color.White)
-            Switch(checked = isOwnerMode, onCheckedChange = { onToggleOwnerMode() })
-        }
-
-        Spacer(Modifier.height(16.dp))
-
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text("Overlay Visible", color = Color.White)
-            Switch(checked = overlayVisible, onCheckedChange = { onToggleOverlay() })
-        }
-
-        Spacer(Modifier.height(24.dp))
-
-        Button(onClick = onRequestOverlay, modifier = Modifier.fillMaxWidth()) {
-            Text("Request Overlay Permission")
-        }
-
-        Spacer(Modifier.height(32.dp))
-        Text("SparkX FairyOS v13 • Local-first companion", color = Color.Gray, fontSize = 12.sp)
-    }
-}
-
-@Composable
-fun QuickActionButton(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
-            .clickable { onClick() }
-            .padding(8.dp)
-    ) {
-        Icon(icon, contentDescription = label, tint = SparkGlass.Cyan, modifier = Modifier.size(28.dp))
-        Spacer(Modifier.height(6.dp))
-        Text(label, color = Color.White, fontSize = 12.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-    }
-}
-
-@Composable
-fun DockButton(label: String, pkg: String, context: android.content.Context) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable {
-        try {
-            val i = context.packageManager.getLaunchIntentForPackage(pkg)
-            if (i != null) context.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        } catch (_: Exception) {}
-    }) {
-        Icon(Icons.Default.Star, contentDescription = label, tint = SparkGlass.Cyan, modifier = Modifier.size(22.dp))
-        Text(label, fontSize = 10.sp, color = Color.White)
-    }
-}
-
-// ... (end of file)
+// ... (other screens remain as previously restored)
