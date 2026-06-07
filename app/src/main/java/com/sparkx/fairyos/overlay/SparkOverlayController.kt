@@ -35,4 +35,20 @@ object SparkOverlayController {
         }
         context.startService(intent)
     }
+
+    // === Free-roam controls ===
+    fun toggleFreeRoam(context: Context) {
+        val intent = Intent(context, SparkOverlayService::class.java).apply {
+            action = "TOGGLE_FREE_ROAM"
+        }
+        context.startService(intent)
+    }
+
+    fun setFreeRoam(context: Context, enabled: Boolean) {
+        val intent = Intent(context, SparkOverlayService::class.java).apply {
+            action = "SET_FREE_ROAM"
+            putExtra("enabled", enabled)
+        }
+        context.startService(intent)
+    }
 }
