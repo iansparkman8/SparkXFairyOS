@@ -9,13 +9,18 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.PixelFormat
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.view.Gravity
+import android.view.MotionEvent
+import android.view.ViewConfiguration
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import com.sparkx.fairyos.R
 import com.sparkx.fairyos.domain.mood.SparkMood
+import kotlin.math.abs
 
 class SparkOverlayService : Service() {
 
@@ -27,6 +32,16 @@ class SparkOverlayService : Service() {
     private var isSpeaking = false
     private var isFreeRoam = false
 
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var wanderRunnable: Runnable? = null
+    private var longPressRunnable: Runnable? = null
+    private var downRawX = 0f
+    private var downRawY = 0f
+    private var startX = 0
+    private var startY = 0
+    private var moved = false
+    private var longPressed = false
+
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
@@ -36,8 +51,8 @@ class SparkOverlayService : Service() {
         params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) 
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY 
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             else WindowManager.LayoutParams.TYPE_PHONE,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                     WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
@@ -47,34 +62,114 @@ class SparkOverlayService : Service() {
             gravity = Gravity.TOP or Gravity.START
             x = 100
             y = 300
-            width = 220
-            height = 220
+            width = 280
+            height = 280
         }
 
-        // Long press to toggle free roam
-        bubbleView?.setOnLongClickListener {
-            isFreeRoam = !isFreeRoam
-            Toast.makeText(this, if (isFreeRoam) "Free-roam mode enabled" else "Free-roam disabled", Toast.LENGTH_SHORT).show()
-            if (isFreeRoam) startWandering()
-            true
-        }
-
-        // Drag support (simple)
-        bubbleView?.setOnTouchListener { v, event ->
-            // Basic drag implementation omitted for brevity in v7; full version would track ACTION_MOVE and update params.x/y
-            // For now, tap to open main app
-            if (event.action == android.view.MotionEvent.ACTION_UP) {
-                val intent = Intent(this, com.sparkx.fairyos.MainActivity::class.java)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                startActivity(intent)
-            }
-            false
-        }
+        installTouchControls()
 
         try {
             windowManager?.addView(bubbleView, params)
         } catch (e: Exception) {
             // Overlay permission not granted
+        }
+    }
+
+    private fun installTouchControls() {
+        val touchSlop = ViewConfiguration.get(this).scaledTouchSlop
+
+        bubbleView?.setOnTouchListener { _, event ->
+            val p = params ?: return@setOnTouchListener true
+            val view = bubbleView ?: return@setOnTouchListener true
+
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    downRawX = event.rawX
+                    downRawY = event.rawY
+                    startX = p.x
+                    startY = p.y
+                    moved = false
+                    longPressed = false
+
+                    longPressRunnable?.let { mainHandler.removeCallbacks(it) }
+                    longPressRunnable = Runnable {
+                        longPressed = true
+                        moved = true
+                        isFreeRoam = !isFreeRoam
+                        Toast.makeText(
+                            this,
+                            if (isFreeRoam) "Free-roam mode enabled" else "Free-roam disabled",
+                            Toast.LENGTH_SHORT
+                        ).show()
+
+                        if (isFreeRoam) {
+                            startWandering()
+                        } else {
+                            stopWandering()
+                        }
+                    }
+                    mainHandler.postDelayed(longPressRunnable!!, 550L)
+                    true
+                }
+
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = event.rawX - downRawX
+                    val dy = event.rawY - downRawY
+
+                    if (abs(dx) > touchSlop || abs(dy) > touchSlop) {
+                        moved = true
+                        longPressRunnable?.let { mainHandler.removeCallbacks(it) }
+
+                        val display = resources.displayMetrics
+                        p.x = (startX + dx.toInt()).coerceIn(0, display.widthPixels - p.width)
+                        p.y = (startY + dy.toInt()).coerceIn(0, display.heightPixels - p.height)
+
+                        try {
+                            windowManager?.updateViewLayout(view, p)
+                        } catch (_: Exception) {
+                        }
+                    }
+                    true
+                }
+
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    longPressRunnable?.let { mainHandler.removeCallbacks(it) }
+
+                    if (!moved && !longPressed) {
+                        openHome()
+                    } else if (!isFreeRoam) {
+                        snapToEdge()
+                    }
+
+                    true
+                }
+
+                else -> true
+            }
+        }
+    }
+
+    private fun openHome() {
+        val intent = Intent(this, com.sparkx.fairyos.MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        startActivity(intent)
+    }
+
+    private fun snapToEdge() {
+        val p = params ?: return
+        val view = bubbleView ?: return
+        val display = resources.displayMetrics
+        val mid = display.widthPixels / 2
+
+        p.x = if (p.x + p.width / 2 < mid) {
+            8
+        } else {
+            display.widthPixels - p.width - 8
+        }
+
+        try {
+            windowManager?.updateViewLayout(view, p)
+        } catch (_: Exception) {
         }
     }
 
@@ -134,7 +229,7 @@ class SparkOverlayService : Service() {
         return NotificationCompat.Builder(this, "spark_fairy_overlay")
             .setContentTitle("Spark Baby is with you")
             .setContentText(if (isFreeRoam) "Free-roam mode active • Long-press bubble to stop" else "Tap bubble to open SparkX Home")
-            .setSmallIcon(android.R.drawable.star_on) // Replace with proper icon in v8
+            .setSmallIcon(android.R.drawable.star_on)
             .setOngoing(true)
             .addAction(0, "Open", openIntent)
             .addAction(0, "Hide", hideIntent)
@@ -143,24 +238,57 @@ class SparkOverlayService : Service() {
     }
 
     private fun startWandering() {
-        // Simple wandering thread for v7
-        Thread {
-            while (isFreeRoam && bubbleView != null) {
-                Thread.sleep(1200)
-                params?.let { p ->
-                    p.x = (p.x + (-40..40).random()).coerceIn(0, 800)
-                    p.y = (p.y + (-30..30).random()).coerceIn(100, 1200)
-                    // Edge snap logic could be added
-                    windowManager?.updateViewLayout(bubbleView, p)
+        stopWandering()
+
+        wanderRunnable = object : Runnable {
+            override fun run() {
+                if (!isFreeRoam || bubbleView == null || params == null) return
+
+                val p = params ?: return
+                val view = bubbleView ?: return
+                val display = resources.displayMetrics
+
+                val dx = (-36..36).random()
+                val dy = (-24..24).random()
+
+                p.x = (p.x + dx).coerceIn(0, display.widthPixels - p.width)
+                p.y = (p.y + dy).coerceIn(80, display.heightPixels - p.height - 80)
+
+                if ((0..5).random() == 0) {
+                    p.x = if (p.x < display.widthPixels / 2) 8 else display.widthPixels - p.width - 8
                 }
+
+                try {
+                    windowManager?.updateViewLayout(view, p)
+                } catch (_: Exception) {
+                }
+
+                mainHandler.postDelayed(this, 1200L)
             }
-        }.start()
+        }
+
+        mainHandler.postDelayed(wanderRunnable!!, 900L)
+    }
+
+    private fun stopWandering() {
+        wanderRunnable?.let { mainHandler.removeCallbacks(it) }
+        wanderRunnable = null
     }
 
     override fun onDestroy() {
-        super.onDestroy()
-        bubbleView?.let { windowManager?.removeView(it) }
+        stopWandering()
+        longPressRunnable?.let { mainHandler.removeCallbacks(it) }
+        longPressRunnable = null
+
+        bubbleView?.let {
+            try {
+                windowManager?.removeView(it)
+            } catch (_: Exception) {
+            }
+        }
+
         bubbleView = null
+        super.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
