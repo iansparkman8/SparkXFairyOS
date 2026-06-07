@@ -431,7 +431,7 @@ fun SparkXApp(
                     onUpdateEntry = onUpdateTeachEntry,
                     onDeleteEntry = onDeleteTeachEntry,
                     onArchiveEntry = onArchiveTeachEntry,
-                    onPinEntry = onPinEntry,
+                    onPinEntry = onPinTeachEntry,
                     onReviewEntry = onReviewTeachEntry,
                     onExportJson = onExportTeachJson
                 )
