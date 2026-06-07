@@ -92,7 +92,7 @@ class MainActivity : ComponentActivity() {
             repo.entriesFlow.collect { teachEntries.clear(); teachEntries.addAll(it) }
         }
 
-        // Create stable callbacks in Activity scope (where lifecycleScope, repo, voiceController exist)
+        // Create stable callbacks in Activity scope
         val onAddTeachEntry: (String, String, String) -> Unit = { title, content, type ->
             lifecycleScope.launch {
                 val entry = TeachGrowEntry(title = title, content = content, type = type)
@@ -411,7 +411,7 @@ fun SparkXHomeScreen(
                 OutlinedTextField(
                     value = commandInput,
                     onValueChange = onCommandInputChange,
-                    placeholder = { Text("Ask Spark Baby... (open youtube, happy, remember this)") },
+                    placeholder = { Text("Ask Spark Baby... (open youtube, happy, remember this improvement, log this bug)") },
                     modifier = Modifier.weight(1f),
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
@@ -505,7 +505,7 @@ fun AppDrawerScreen(onLaunchApp: (String) -> Unit) {
     }
 }
 
-// TeachGrowScreen and helpers (already present from previous upgrade)
+// ==================== TEACH & GROW SCREEN ====================
 
 @Composable
 fun TeachGrowScreen(
@@ -524,7 +524,7 @@ fun TeachGrowScreen(
     var query by remember { mutableStateOf("") }
     var showArchived by remember { mutableStateOf(false) }
 
-    val types = listOf("all", "lesson", "code", "behavior", "memory", "prompt", "idea", "system")
+    val types = listOf("all", "lesson", "code", "behavior", "memory", "prompt", "idea", "system", "self-upgrade", "bug", "feature")
 
     val filtered = remember(entries, query, selectedType, showArchived) {
         val q = query.trim().lowercase()
@@ -565,7 +565,7 @@ fun TeachGrowScreen(
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    "Local lessons, memories, behaviors, prompts, and safe code notes.",
+                    "Local lessons, memories, behaviors, prompts, and safe code notes. Also tracks self-upgrades.",
                     color = Color(0xFF9C7BFF),
                     fontSize = 12.sp
                 )
@@ -625,7 +625,7 @@ fun TeachGrowScreen(
         ) {
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf("all", "lesson", "code", "behavior", "memory").forEach { type ->
+                    listOf("all", "lesson", "code", "behavior", "memory", "self-upgrade", "bug", "feature").forEach { type ->
                         FilterChip(
                             selected = selectedType == type,
                             onClick = { selectedType = type },
@@ -747,7 +747,7 @@ fun SparkEmptyTeachState(onAdd: () -> Unit, hasEntries: Boolean) {
                 fontWeight = FontWeight.Bold
             )
             Text(
-                if (hasEntries) "Try changing search or filters." else "Add lessons, code snippets, memories, behaviors, prompts, and ideas.",
+                if (hasEntries) "Try changing search or filters." else "Add lessons, code snippets, memories, behaviors, prompts, ideas, and self-upgrade tasks.",
                 color = Color(0xFFCCCCCC),
                 fontSize = 13.sp
             )
@@ -776,6 +776,9 @@ fun TeachEntryCard(
         "prompt" -> Color(0xFFFFD166)
         "idea" -> Color(0xFFFF9F1C)
         "system" -> Color(0xFFFF5555)
+        "self-upgrade" -> Color(0xFF7C4DFF)
+        "bug" -> Color(0xFFFF5252)
+        "feature" -> Color(0xFF00BCD4)
         else -> Color(0xFFCCCCCC)
     }
 
@@ -890,7 +893,7 @@ fun TeachEntryEditorDialog(
     var tagsText by remember(initial?.id) { mutableStateOf(initial?.tags?.joinToString(", ") ?: "") }
     var priority by remember(initial?.id) { mutableStateOf(initial?.priority ?: 2) }
 
-    val typeOptions = listOf("lesson", "code", "behavior", "memory", "prompt", "idea", "system")
+    val typeOptions = listOf("lesson", "code", "behavior", "memory", "prompt", "idea", "system", "self-upgrade", "bug", "feature")
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -942,7 +945,7 @@ fun TeachEntryEditorDialog(
                 item {
                     Text("Type", color = Color.White, fontWeight = FontWeight.Bold)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        typeOptions.take(4).forEach { option ->
+                        typeOptions.take(5).forEach { option ->
                             FilterChip(
                                 selected = type == option,
                                 onClick = { type = option },
@@ -951,7 +954,7 @@ fun TeachEntryEditorDialog(
                         }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        typeOptions.drop(4).forEach { option ->
+                        typeOptions.drop(5).forEach { option ->
                             FilterChip(
                                 selected = type == option,
                                 onClick = { type = option },
@@ -966,7 +969,7 @@ fun TeachEntryEditorDialog(
                         value = tagsText,
                         onValueChange = { tagsText = it },
                         label = { Text("Tags, comma separated") },
-                        placeholder = { Text("kotlin, avatar, command") },
+                        placeholder = { Text("kotlin, avatar, command, upgrade") },
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -1060,9 +1063,6 @@ fun TemplateButtons(
                 },
                 label = { Text("Code") }
             )
-        }
-        Spacer(Modifier.height(6.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             AssistChip(
                 onClick = {
                     onTemplate(
@@ -1073,6 +1073,9 @@ fun TemplateButtons(
                 },
                 label = { Text("Behavior") }
             )
+        }
+        Spacer(Modifier.height(6.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             AssistChip(
                 onClick = {
                     onTemplate(
@@ -1082,6 +1085,49 @@ fun TemplateButtons(
                     )
                 },
                 label = { Text("Memory") }
+            )
+            AssistChip(
+                onClick = {
+                    onTemplate(
+                        "Self-Upgrade Task",
+                        "Goal:\n\nWhy it matters:\n\nFiles likely affected:\n\nSafety rule:\n\nHow to test:",
+                        "self-upgrade"
+                    )
+                },
+                label = { Text("Self-Upgrade") }
+            )
+            AssistChip(
+                onClick = {
+                    onTemplate(
+                        "Bug Report",
+                        "What broke:\n\nSteps to reproduce:\n\nExpected behavior:\n\nActual behavior:\n\nLogs/screenshots:",
+                        "bug"
+                    )
+                },
+                label = { Text("Bug") }
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            AssistChip(
+                onClick = {
+                    onTemplate(
+                        "Feature Request",
+                        "Feature:\n\nUser benefit:\n\nUI behavior:\n\nSafety limits:\n\nTest plan:",
+                        "feature"
+                    )
+                },
+                label = { Text("Feature") }
+            )
+            AssistChip(
+                onClick = {
+                    onTemplate(
+                        "System Note",
+                        "System note:\n\nReason:\n\nDo not forget:\n\nRelated feature:",
+                        "system"
+                    )
+                },
+                label = { Text("System") }
             )
         }
     }
@@ -1096,7 +1142,7 @@ fun formatTeachDate(timestamp: Long): String {
     }
 }
 
-// ==================== AI PROVIDER SCREEN (restored) ====================
+// ==================== AI PROVIDER SCREEN ====================
 
 @Composable
 fun AIProviderScreen() {
