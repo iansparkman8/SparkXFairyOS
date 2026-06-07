@@ -73,7 +73,7 @@ class SparkCommandRouter(
             }
             cmd.contains("set timer") || cmd.contains("timer for") -> {
                 // Extract minutes if possible, default 5
-                val minutes = Regex("(\d+)").find(cmd)?.groupValues?.get(1)?.toIntOrNull() ?: 5
+                val minutes = Regex("""(\d+)""").find(cmd)?.groupValues?.get(1)?.toIntOrNull() ?: 5
                 if (isOwnerMode) {
                     CommandResult(
                         "Setting a $minutes minute timer. Confirm?",
@@ -92,7 +92,7 @@ class SparkCommandRouter(
                         teachGrowRepo.addEntry(TeachGrowEntry(title = "Quick Memory", content = note, type = "memory"))
                     }
                     CommandResult("Saved to Teach & Grow as memory.", SparkMood.HAPPY)
-                } else CommandResult("What would you like me to remember?", SparkMood.THINKING)
+                } else CommandResult("What would you like to remember?", SparkMood.THINKING)
             }
             cmd.contains("teach") -> {
                 val lesson = raw.substringAfter("teach", "").trim()
