@@ -406,8 +406,7 @@ fun SparkXApp(
                     isListening = isListening,
                     avatarPulseKey = avatarPulseKey,
                     onAvatarTap = {
-                        currentMood = SparkMood.HAPPY
-                        // Note: avatarPulseKey++ would need to be lifted or handled via callback in real impl
+                        avatarPulseKey++
                     }
                 )
             }
