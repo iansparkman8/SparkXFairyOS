@@ -35,6 +35,7 @@ class SparkOverlayAvatarView(context: Context) : FrameLayout(context) {
     private var currentMood: SparkMood = SparkMood.IDLE
     private var isSpeaking: Boolean = false
     private var currentForm: SparkForm = SparkForm.DEFAULT_FAIRY
+    private var currentAssetName: String? = null
 
     init {
         clipChildren = false
@@ -135,9 +136,24 @@ class SparkOverlayAvatarView(context: Context) : FrameLayout(context) {
 
         val resId = resources.getIdentifier(assetName, "drawable", context.packageName)
 
-        if (resId != 0) {
-            fairyImage.setImageResource(resId)
-        } else {
+        if (assetName != currentAssetName) {
+            currentAssetName = assetName
+            fairyImage.alpha = 0.18f
+
+            if (resId != 0) {
+                fairyImage.setImageResource(resId)
+                fairyImage.contentDescription = "Spark Baby ${currentMood.name.lowercase()} avatar"
+            } else {
+                fairyImage.setImageResource(android.R.drawable.star_big_on)
+                fairyImage.contentDescription = "Missing Spark Baby asset: $assetName"
+            }
+
+            ObjectAnimator.ofFloat(fairyImage, View.ALPHA, 0.18f, 1f).apply {
+                duration = 240L
+                interpolator = AccelerateDecelerateInterpolator()
+                start()
+            }
+        } else if (resId == 0) {
             fairyImage.setImageResource(android.R.drawable.star_big_on)
         }
     }
@@ -220,13 +236,13 @@ private class SparkOverlayGlowView(context: Context) : View(context) {
         val cy = height / 2f
 
         val base = when {
-            speaking -> Color.rgb(255, 120, 220)
-            mood == SparkMood.HAPPY -> Color.rgb(255, 140, 235)
-            mood == SparkMood.THINKING -> Color.rgb(170, 130, 255)
-            mood == SparkMood.LISTENING -> Color.rgb(0, 255, 215)
-            mood == SparkMood.ALERT -> Color.rgb(255, 90, 120)
-            mood == SparkMood.SLEEPY -> Color.rgb(150, 155, 255)
-            else -> Color.rgb(0, 229, 255)
+            speaking -> Color.rgb(125, 211, 252)
+            mood == SparkMood.HAPPY -> Color.rgb(229, 231, 235)
+            mood == SparkMood.THINKING -> Color.rgb(96, 165, 250)
+            mood == SparkMood.LISTENING -> Color.rgb(56, 189, 248)
+            mood == SparkMood.ALERT -> Color.rgb(59, 130, 246)
+            mood == SparkMood.SLEEPY -> Color.rgb(148, 163, 184)
+            else -> Color.rgb(125, 211, 252)
         }
 
         val pulse = 1f + sin(time * if (speaking) 6f else 2f) * 0.055f
@@ -244,7 +260,7 @@ private class SparkOverlayGlowView(context: Context) : View(context) {
             width * 0.47f * pulse,
             intArrayOf(
                 Color.argb(alpha, Color.red(base), Color.green(base), Color.blue(base)),
-                Color.argb(alpha / 2, 160, 95, 255),
+                Color.argb(alpha / 2, 191, 199, 213),
                 Color.TRANSPARENT
             ),
             floatArrayOf(0f, 0.55f, 1f),
@@ -253,6 +269,45 @@ private class SparkOverlayGlowView(context: Context) : View(context) {
 
         canvas.drawCircle(cx, cy, width * 0.47f * pulse, paint)
         paint.shader = null
+
+        val ringPulse = (sin(time * 3.2f) + 1f) * 0.5f
+        val ringAlpha = when {
+            speaking -> 160
+            mood == SparkMood.LISTENING -> 140
+            mood == SparkMood.THINKING -> 115
+            mood == SparkMood.ALERT -> 150
+            else -> 72
+        }
+
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = if (speaking) 3.4f else 2.2f
+        paint.color = Color.argb(
+            ringAlpha,
+            Color.red(base),
+            Color.green(base),
+            Color.blue(base)
+        )
+        canvas.drawCircle(cx, cy, width * (0.34f + ringPulse * 0.035f), paint)
+
+        if (speaking || mood == SparkMood.LISTENING) {
+            paint.strokeWidth = 1.4f
+            paint.color = Color.argb(95, 191, 199, 213)
+            canvas.drawCircle(cx, cy, width * (0.41f + ringPulse * 0.055f), paint)
+        }
+
+        if (mood == SparkMood.THINKING) {
+            paint.strokeWidth = 1.8f
+            paint.color = Color.argb(120, 125, 211, 252)
+            val orbit = time * 2.2f
+            repeat(3) { index ->
+                val angle = orbit + index * 2.094f
+                val x = cx + cos(angle) * width * 0.30f
+                val y = cy + sin(angle) * width * 0.30f
+                canvas.drawCircle(x, y, 4.2f, paint)
+            }
+        }
+
+        paint.style = Paint.Style.FILL
 
         postInvalidateOnAnimation()
     }
@@ -315,18 +370,22 @@ private class SparkOverlayParticleView(context: Context) : View(context) {
         val cy = height / 2f
 
         val color = when {
-            speaking -> Color.rgb(255, 145, 230)
-            mood == SparkMood.ALERT -> Color.rgb(255, 120, 120)
-            mood == SparkMood.LISTENING -> Color.rgb(0, 255, 210)
-            mood == SparkMood.SLEEPY -> Color.rgb(180, 180, 255)
-            mood == SparkMood.HAPPY -> Color.rgb(255, 185, 245)
-            else -> Color.rgb(155, 235, 255)
+            speaking -> Color.rgb(125, 211, 252)
+            mood == SparkMood.ALERT -> Color.rgb(59, 130, 246)
+            mood == SparkMood.LISTENING -> Color.rgb(56, 189, 248)
+            mood == SparkMood.SLEEPY -> Color.rgb(148, 163, 184)
+            mood == SparkMood.HAPPY -> Color.rgb(229, 231, 235)
+            mood == SparkMood.THINKING -> Color.rgb(96, 165, 250)
+            else -> Color.rgb(125, 211, 252)
         }
 
         val count = when {
-            speaking -> 30
+            speaking -> 32
+            mood == SparkMood.LISTENING -> 30
+            mood == SparkMood.THINKING -> 28
             freeRoam -> 26
-            else -> 18
+            mood == SparkMood.SLEEPY -> 14
+            else -> 20
         }
 
         for (i in 0 until count.coerceAtMost(seeds.size)) {
@@ -360,16 +419,16 @@ private class SparkOverlayParticleView(context: Context) : View(context) {
 
     private fun drawBurst(canvas: Canvas, color: Int) {
         val age = System.currentTimeMillis() - burstAt
-        if (age !in 0..420) return
+        if (age !in 0..620) return
 
-        val progress = age / 420f
+        val progress = age / 620f
         val cx = width / 2f
         val cy = height / 2f
-        val radius = width * (0.15f + 0.32f * progress)
+        val radius = width * (0.13f + 0.42f * progress)
         val alpha = ((1f - progress) * 220).toInt().coerceIn(0, 220)
 
         paint.style = Paint.Style.STROKE
-        paint.strokeWidth = (4f * (1f - progress)).coerceAtLeast(0.6f)
+        paint.strokeWidth = (5.5f * (1f - progress)).coerceAtLeast(0.7f)
         paint.color = Color.argb(alpha, Color.red(color), Color.green(color), Color.blue(color))
         canvas.drawCircle(cx, cy, radius, paint)
         paint.style = Paint.Style.FILL
