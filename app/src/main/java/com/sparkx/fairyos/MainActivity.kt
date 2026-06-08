@@ -491,9 +491,9 @@ fun SparkXHomeScreen(
     }
 
     val statusText = when {
-        isListening -> "🎙️ Listening…"
-        isSpeaking  -> "💬 Speaking…"
-        else        -> "Mood: ${currentMood.name.lowercase().replaceFirstChar { it.uppercase() }}"
+        isListening -> "Listening"
+        isSpeaking  -> "Speaking"
+        else        -> currentMood.name.lowercase().replaceFirstChar { it.uppercase() }
     }
 
     Box(
@@ -501,19 +501,19 @@ fun SparkXHomeScreen(
             .fillMaxSize()
             .background(Brush.verticalGradient(listOf(bgTop, bgBottom)))
     ) {
-        // Radial glow behind avatar
+        // Strong mood-reactive glow behind avatar
         Box(
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .offset(y = 100.dp)
-                .size(300.dp)
+                .offset(y = 80.dp)
+                .size(340.dp)
                 .background(
                     Brush.radialGradient(
                         colors = listOf(
-                            moodAccent.copy(alpha = 0.15f),
+                            moodAccent.copy(alpha = 0.18f),
                             Color.Transparent
-                    )
-                ),
+                        )
+                    ),
                     shape = CircleShape
                 )
         )
@@ -522,236 +522,180 @@ fun SparkXHomeScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 16.dp),
+                .padding(horizontal = 20.dp, vertical = 20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
         ) {
 
-            // ── Top status row ────────────────────────────────────────────────
+            // ── Top status bar ────────────────────────────────────────────────
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "SparkX FairyOS",
-                    fontSize = 12.sp,
-                    color = textSoft.copy(alpha = 0.45f),
-                    letterSpacing = 0.08.em
+                    text = "SPARKX FAIRYOS",
+                    fontSize = 11.sp,
+                    color = textSoft.copy(alpha = 0.4f),
+                    letterSpacing = 0.12.em,
+                    fontWeight = FontWeight.SemiBold
                 )
-                PremiumStatusPill(
-                    label = if (overlayVisible) "Overlay" else "App",
-                    value = if (overlayVisible) "ON" else "OFF",
-                    accent = if (overlayVisible) cyan else textSoft.copy(alpha = 0.35f)
-                )
-                if (isOwnerMode) {
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (isOwnerMode) {
+                        PremiumStatusPill(label = "OWNER", value = "ON", accent = gold)
+                    }
                     PremiumStatusPill(
-                        label = "Owner",
-                        value = "✓",
-                        accent = gold
+                        label = "OVERLAY",
+                        value = if (overlayVisible) "LIVE" else "OFF",
+                        accent = if (overlayVisible) cyan else textSoft.copy(alpha = 0.35f)
                     )
                 }
+            }
+
+            Spacer(Modifier.height(24.dp))
+
+            // ── HERO SECTION ──────────────────────────────────────────────────
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                // Small label
+                Text(
+                    text = "YOUR COMPANION",
+                    fontSize = 10.sp,
+                    color = moodAccent.copy(alpha = 0.6f),
+                    letterSpacing = 0.2.em,
+                    fontWeight = FontWeight.Medium
+                )
+
+                Spacer(Modifier.height(8.dp))
+
+                // Big name
+                Text(
+                    text = "Spark Baby",
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = Color.White,
+                    letterSpacing = (-0.02).em
+                )
+
+                Spacer(Modifier.height(6.dp))
+
+                Text(
+                    text = statusText,
+                    fontSize = 13.sp,
+                    color = moodAccent,
+                    fontWeight = FontWeight.Medium
+                )
+
+                Spacer(Modifier.height(20.dp))
+
+                // Avatar Hero
+                Box(
+                    modifier = Modifier
+                        .size(280.dp)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) { onAvatarTap() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    SparkBabyAvatar(
+                        mood        = currentMood,
+                        isSpeaking  = isSpeaking,
+                        reactionKey = avatarPulseKey,
+                        modifier    = Modifier.fillMaxSize()
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(24.dp))
+
+            // ── QUICK ACTIONS ─────────────────────────────────────────────────
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                PremiumActionButton(
+                    modifier = Modifier.weight(1f),
+                    label = "Speak",
+                    emoji = "🎙️",
+                    accent = cyan,
+                    onClick = onMicClick
+                )
+                PremiumActionButton(
+                    modifier = Modifier.weight(1f),
+                    label = if (overlayVisible) "Hide Overlay" else "Show Overlay",
+                    emoji = if (overlayVisible) "◉" else "◎",
+                    accent = if (overlayVisible) violet else textSoft.copy(alpha = 0.5f),
+                    onClick = onToggleOverlay
+                )
+                PremiumActionButton(
+                    modifier = Modifier.weight(1f),
+                    label = "Teach & Grow",
+                    emoji = "🌱",
+                    accent = gold,
+                    onClick = onNavigateToTeach
+                )
             }
 
             Spacer(Modifier.height(20.dp))
 
-            // ── Hero glass card ───────────────────────────────────────────────
-            PremiumGlassCard(modifier = Modifier.fillMaxWidth()) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 28.dp, horizontal = 16.dp)
-                ) {
-                    Text(
-                        text = "Spark Baby",
-                        fontSize = 11.sp,
-                        color = moodAccent.copy(alpha = 0.65f),
-                        letterSpacing = 0.18.em
-                    )
-
-                    Spacer(Modifier.height(14.dp))
-
-                    // Avatar — preserves existing tap flow
-                    Box(
-                        modifier = Modifier
-                            .size(260.dp)
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null
-                            ) { onAvatarTap() },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        SparkBabyAvatar(
-                            mood        = currentMood,
-                            isSpeaking  = isSpeaking,
-                            reactionKey = avatarPulseKey,
-                            modifier    = Modifier.fillMaxSize()
-                        )
-                    }
-
-                    Spacer(Modifier.height(14.dp))
-
-                    Text(
-                        text = "Spark Baby",
-                        fontSize = 26.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = Color.White,
-                        letterSpacing = (-0.02).em
-                    )
-
-                    Spacer(Modifier.height(4.dp))
-
-                    Text(
-                        text = statusText,
-                        fontSize = 12.sp,
-                        color = textSoft.copy(alpha = 0.55f)
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(14.dp))
-
-            // ── Quick action row ──────────────────────────────────────────────
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                PremiumActionButton(
-                    modifier = Modifier.weight(1f),
-                    label    = "Speak",
-                    emoji    = "🎙️",
-                    accent   = cyan,
-                    onClick  = onMicClick
-                )
-                PremiumActionButton(
-                    modifier = Modifier.weight(1f),
-                    label    = if (overlayVisible) "Overlay ON" else "Overlay",
-                    emoji    = if (overlayVisible) "✦" else "◎",
-                    accent   = if (overlayVisible) violet else textSoft.copy(alpha = 0.45f),
-                    onClick  = onToggleOverlay
-                )
-                PremiumActionButton(
-                    modifier = Modifier.weight(1f),
-                    label    = "Teach",
-                    emoji    = "📖",
-                    accent   = gold,
-                    onClick  = onNavigateToTeach
-                )
-            }
-
-            Spacer(Modifier.height(14.dp))
-
-            // ── Growth placeholder card ───────────────────────────────────────
+            // ── COMMAND BAR ───────────────────────────────────────────────────
             PremiumGlassCard(modifier = Modifier.fillMaxWidth()) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 18.dp, vertical = 14.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Column {
-                        Text(
-                            text = "Growth",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                        Spacer(Modifier.height(2.dp))
-                        Text(
-                            text = "Bond: syncing soon",
-                            fontSize = 11.sp,
-                            color = textSoft.copy(alpha = 0.45f)
-                        )
-                        Text(
-                            text = "Growth: local mode",
-                            fontSize = 11.sp,
-                            color = textSoft.copy(alpha = 0.35f)
-                        )
-                    }
-                    Text(
-                        text = "✦",
-                        fontSize = 28.sp,
-                        color = violet.copy(alpha = 0.5f)
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(14.dp))
-
-            // ── Command input card ────────────────────────────────────────────
-            PremiumGlassCard(modifier = Modifier.fillMaxWidth()) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(14.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        BasicTextField(
-                            value = commandInput,
-                            onValueChange = onCommandInputChange,
-                            modifier = Modifier
-                                .weight(1f)
-                                .background(
-                                    Color.White.copy(alpha = 0.05f),
-                                    RoundedCornerShape(12.dp)
+                    BasicTextField(
+                        value = commandInput,
+                        onValueChange = onCommandInputChange,
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(Color.White.copy(alpha = 0.06f), RoundedCornerShape(16.dp))
+                            .border(1.dp, violet.copy(alpha = 0.25f), RoundedCornerShape(16.dp))
+                            .padding(horizontal = 18.dp, vertical = 14.dp),
+                        textStyle = TextStyle(
+                            color = Color.White,
+                            fontSize = 15.sp
+                        ),
+                        singleLine = true,
+                        keyboardActions = KeyboardActions(
+                            onDone = { onSendCommand(commandInput) }
+                        ),
+                        decorationBox = { inner ->
+                            if (commandInput.isEmpty()) {
+                                Text(
+                                    "Talk to Spark Baby…",
+                                    fontSize = 15.sp,
+                                    color = textSoft.copy(alpha = 0.35f)
                                 )
-                                .border(
-                                    1.dp,
-                                    violet.copy(alpha = 0.22f),
-                                    RoundedCornerShape(12.dp)
-                                )
-                                .padding(horizontal = 14.dp, vertical = 11.dp),
-                            textStyle = TextStyle(
-                                color    = Color.White,
-                                fontSize = 13.sp
-                            ),
-                            singleLine = true,
-                            keyboardActions = KeyboardActions(
-                                onDone = { onSendCommand(commandInput) }
-                            ),
-                            decorationBox = { inner ->
-                                if (commandInput.isEmpty()) {
-                                    Text(
-                                        "Talk to Spark Baby…",
-                                        fontSize = 13.sp,
-                                        color = textSoft.copy(alpha = 0.30f)
-                                    )
-                                }
-                                inner()
                             }
-                        )
-                        Box(
-                            modifier = Modifier
-                                .size(42.dp)
-                                .background(
-                                    violet.copy(alpha = 0.22f),
-                                    RoundedCornerShape(12.dp)
-                                )
-                                .border(
-                                    1.dp,
-                                    violet.copy(alpha = 0.45f),
-                                    RoundedCornerShape(12.dp)
-                                )
-                                .clickable { onSendCommand(commandInput) },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                "↑",
-                                fontSize = 17.sp,
-                                color = violet,
-                                fontWeight = FontWeight.Bold
-                            )
+                            inner()
                         }
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .background(violet.copy(alpha = 0.25f), RoundedCornerShape(14.dp))
+                            .clickable { onSendCommand(commandInput) },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            "↑",
+                            fontSize = 20.sp,
+                            color = violet,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
             }
 
-            Spacer(Modifier.height(32.dp))
+            Spacer(Modifier.height(28.dp))
         }
     }
 }
@@ -786,13 +730,13 @@ private fun PremiumStatusPill(
 ) {
     Row(
         modifier = Modifier
-            .background(accent.copy(alpha = 0.10f), RoundedCornerShape(99.dp))
-            .border(1.dp, accent.copy(alpha = 0.28f), RoundedCornerShape(99.dp))
-            .padding(horizontal = 10.dp, vertical = 4.dp),
+            .background(accent.copy(alpha = 0.12f), RoundedCornerShape(99.dp))
+            .border(1.dp, accent.copy(alpha = 0.35f), RoundedCornerShape(99.dp))
+            .padding(horizontal = 10.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Text(label, fontSize = 10.sp, color = accent.copy(alpha = 0.55f))
+        Text(label, fontSize = 9.sp, color = accent.copy(alpha = 0.6f), fontWeight = FontWeight.Medium)
         Text(value, fontSize = 10.sp, color = accent, fontWeight = FontWeight.Bold)
     }
 }
@@ -807,17 +751,17 @@ private fun PremiumActionButton(
 ) {
     Column(
         modifier = modifier
-            .background(accent.copy(alpha = 0.09f), RoundedCornerShape(16.dp))
-            .border(1.dp, accent.copy(alpha = 0.25f), RoundedCornerShape(16.dp))
+            .background(accent.copy(alpha = 0.10f), RoundedCornerShape(18.dp))
+            .border(1.dp, accent.copy(alpha = 0.28f), RoundedCornerShape(18.dp))
             .clickable { onClick() }
-            .padding(vertical = 13.dp),
+            .padding(vertical = 14.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(emoji, fontSize = 20.sp)
-        Spacer(Modifier.height(4.dp))
+        Text(emoji, fontSize = 22.sp)
+        Spacer(Modifier.height(5.dp))
         Text(
             text       = label,
-            fontSize   = 11.sp,
+            fontSize   = 12.sp,
             color      = accent,
             fontWeight = FontWeight.SemiBold,
             textAlign  = TextAlign.Center
