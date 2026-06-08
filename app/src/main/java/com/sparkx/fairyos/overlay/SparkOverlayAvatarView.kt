@@ -3,9 +3,12 @@ package com.sparkx.fairyos.overlay
 import android.animation.AnimatorSet
 import android.animation.ObjectAnimator
 import android.content.Context
+import android.graphics.BlurMaskFilter
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.LinearGradient
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.RadialGradient
 import android.graphics.Shader
 import android.os.Handler
@@ -46,7 +49,6 @@ class SparkOverlayAvatarView(context: Context) : FrameLayout(context) {
     private var idleFrameIndex = 0
     private val idleFrameRateMs = 280L
 
-    // Idle frame names (base + optional numbered frames for breathing cycle)
     private val idleFrameNames = listOf(
         "spark_fairy_idle",
         "spark_fairy_idle_01",
@@ -191,10 +193,6 @@ class SparkOverlayAvatarView(context: Context) : FrameLayout(context) {
 
     // region Animation System
 
-    /**
-     * Continuous gentle floating/bobbing animation (always running).
-     * This gives Spark Baby a living, breathing presence even without frame changes.
-     */
     private fun startContinuousFloatAnimation() {
         fairyImage.animate()
             .translationY(-10f)
@@ -215,10 +213,6 @@ class SparkOverlayAvatarView(context: Context) : FrameLayout(context) {
             .start()
     }
 
-    /**
-     * Starts cycling through idle frames for breathing effect.
-     * Only runs when mood is IDLE and not speaking.
-     */
     private fun startIdleFrameCycling() {
         if (isIdleFrameCycling) return
         isIdleFrameCycling = true
@@ -283,6 +277,177 @@ class SparkOverlayAvatarView(context: Context) : FrameLayout(context) {
     }
 
     // endregion
+}
+
+// ========================================================
+// PROCEDURAL WING RENDERER (High Quality + Mood Reactive)
+// ========================================================
+
+/**
+ * Draws beautiful procedural holographic wings.
+ * Layered gradients + veins + iridescence + mood reactivity.
+ *
+ * This is designed to be called from a custom View's onDraw().
+ */
+object ProceduralWingRenderer {
+
+    private val wingPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val veinPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+
+    private var lastPhase = 0f
+
+    fun drawWings(
+        canvas: Canvas,
+        cx: Float,
+        cy: Float,
+        width: Float,
+        height: Float,
+        mood: SparkMood,
+        isSpeaking: Boolean,
+        time: Float
+    ) {
+        val unit = width / 220f
+        val phase = time * 1.8f
+
+        // Mood-based color palette
+        val primary = when {
+            isSpeaking -> Color.rgb(125, 211, 252)
+            mood == SparkMood.HAPPY -> Color.rgb(180, 220, 255)
+            mood == SparkMood.THINKING -> Color.rgb(140, 180, 255)
+            mood == SparkMood.LISTENING -> Color.rgb(100, 220, 240)
+            mood == SparkMood.ALERT -> Color.rgb(120, 160, 255)
+            mood == SparkMood.SLEEPY -> Color.rgb(160, 180, 220)
+            else -> Color.rgb(140, 200, 255)
+        }
+
+        val secondary = when {
+            isSpeaking -> Color.rgb(180, 140, 255)
+            mood == SparkMood.HAPPY -> Color.rgb(200, 160, 255)
+            mood == SparkMood.THINKING -> Color.rgb(120, 200, 255)
+            mood == SparkMood.LISTENING -> Color.rgb(80, 220, 255)
+            mood == SparkMood.ALERT -> Color.rgb(200, 120, 180)
+            mood == SparkMood.SLEEPY -> Color.rgb(180, 190, 230)
+            else -> Color.rgb(150, 200, 255)
+        }
+
+        val wingAlpha = when {
+            isSpeaking -> 0.85f
+            mood == SparkMood.HAPPY -> 0.78f
+            mood == SparkMood.SLEEPY -> 0.55f
+            else -> 0.68f
+        }
+
+        // === LEFT WING (Upper + Lower) ===
+        drawSingleWing(
+            canvas, cx - 38f * unit, cy - 8f * unit,
+            scaleX = -1f, scaleY = 1f,
+            primary, secondary, wingAlpha, phase, unit, mood, isSpeaking
+        )
+
+        // === RIGHT WING (Upper + Lower) ===
+        drawSingleWing(
+            canvas, cx + 38f * unit, cy - 8f * unit,
+            scaleX = 1f, scaleY = 1f,
+            primary, secondary, wingAlpha, phase, unit, mood, isSpeaking
+        )
+    }
+
+    private fun drawSingleWing(
+        canvas: Canvas,
+        cx: Float,
+        cy: Float,
+        scaleX: Float,
+        scaleY: Float,
+        primary: Int,
+        secondary: Int,
+        alpha: Float,
+        phase: Float,
+        unit: Float,
+        mood: SparkMood,
+        isSpeaking: Boolean
+    ) {
+        val p = Path()
+
+        // Wing shape (large elegant wing)
+        p.moveTo(cx, cy)
+        p.cubicTo(
+            cx + 85f * scaleX * unit, cy - 45f * scaleY * unit,
+            cx + 120f * scaleX * unit, cy - 95f * scaleY * unit,
+            cx + 95f * scaleX * unit, cy - 145f * scaleY * unit
+        )
+        p.cubicTo(
+            cx + 70f * scaleX * unit, cy - 175f * scaleY * unit,
+            cx + 25f * scaleX * unit, cy - 155f * scaleY * unit,
+            cx, cy - 115f * scaleY * unit
+        )
+        p.close()
+
+        // Base wing fill with gradient
+        wingPaint.shader = LinearGradient(
+            cx - 40f * scaleX * unit, cy - 160f * scaleY * unit,
+            cx + 110f * scaleX * unit, cy + 20f * scaleY * unit,
+            intArrayOf(
+                Color.argb((255 * alpha * 0.7f).toInt(), Color.red(primary), Color.green(primary), Color.blue(primary)),
+                Color.argb((255 * alpha * 0.95f).toInt(), Color.red(secondary), Color.green(secondary), Color.blue(secondary)),
+                Color.argb((255 * alpha * 0.65f).toInt(), Color.red(primary), Color.green(primary), Color.blue(primary))
+            ),
+            floatArrayOf(0f, 0.45f, 1f),
+            Shader.TileMode.CLAMP
+        )
+        wingPaint.style = Paint.Style.FILL
+        canvas.drawPath(p, wingPaint)
+
+        // Edge highlight
+        wingPaint.shader = null
+        wingPaint.color = Color.argb((255 * alpha * 0.6f).toInt(), 255, 255, 255)
+        wingPaint.style = Paint.Style.STROKE
+        wingPaint.strokeWidth = 2.5f * unit
+        canvas.drawPath(p, wingPaint)
+
+        // === Wing Veins ===
+        veinPaint.color = Color.argb((255 * alpha * 0.35f).toInt(), 200, 230, 255)
+        veinPaint.strokeWidth = 1.2f * unit
+        veinPaint.style = Paint.Style.STROKE
+
+        // Main vein lines
+        for (i in 0..4) {
+            val t = i / 4f
+            val startX = cx + (20f + t * 35f) * scaleX * unit
+            val startY = cy - (30f + t * 60f) * scaleY * unit
+            val endX = cx + (55f + t * 25f) * scaleX * unit
+            val endY = cy - (90f + t * 35f) * scaleY * unit
+
+            canvas.drawLine(startX, startY, endX, endY, veinPaint)
+        }
+
+        // Subtle inner glow layer
+        glowPaint.shader = RadialGradient(
+            cx + 45f * scaleX * unit,
+            cy - 90f * scaleY * unit,
+            85f * unit,
+            Color.argb((255 * alpha * 0.25f).toInt(), Color.red(secondary), Color.green(secondary), Color.blue(secondary)),
+            Color.TRANSPARENT,
+            Shader.TileMode.CLAMP
+        )
+        glowPaint.style = Paint.Style.FILL
+        canvas.drawPath(p, glowPaint)
+
+        // Extra shimmer when speaking or happy
+        if (isSpeaking || mood == SparkMood.HAPPY) {
+            val shimmerPhase = (phase * 2.2f) % 6.28f
+            glowPaint.shader = LinearGradient(
+                cx - 30f * scaleX * unit + cos(shimmerPhase) * 40f * unit,
+                cy - 140f * scaleY * unit,
+                cx + 80f * scaleX * unit + sin(shimmerPhase) * 30f * unit,
+                cy + 10f * scaleY * unit,
+                Color.argb(45, 255, 255, 255),
+                Color.TRANSPARENT,
+                Shader.TileMode.CLAMP
+            )
+            canvas.drawPath(p, glowPaint)
+        }
+    }
 }
 
 private class SparkOverlayGlowView(context: Context) : View(context) {
