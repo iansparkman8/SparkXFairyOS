@@ -8,6 +8,8 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RadialGradient
 import android.graphics.Shader
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.view.Gravity
 import android.view.View
@@ -36,6 +38,18 @@ class SparkOverlayAvatarView(context: Context) : FrameLayout(context) {
     private var isSpeaking: Boolean = false
     private var currentForm: SparkForm = SparkForm.DEFAULT_FAIRY
     private var currentAssetName: String? = null
+
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var idleFrameIndex = 0
+    private var isIdleAnimating = false
+
+    // Idle animation frames (add more files later for smoother breathing)
+    private val idleFrameNames = listOf(
+        "spark_fairy_idle",
+        "spark_fairy_idle_01",
+        "spark_fairy_idle_02",
+        "spark_fairy_idle_03"
+    )
 
     init {
         clipChildren = false
@@ -89,8 +103,13 @@ class SparkOverlayAvatarView(context: Context) : FrameLayout(context) {
         particleView.updateMood(mood, speaking)
 
         if (changed) {
+            stopIdleAnimation()
             applyMoodAsset()
             pulseSmall()
+
+            if (mood == SparkMood.IDLE && !speaking) {
+                startIdleAnimation()
+            }
         }
     }
 
@@ -178,6 +197,40 @@ class SparkOverlayAvatarView(context: Context) : FrameLayout(context) {
             .start()
     }
 
+    private fun startIdleAnimation() {
+        if (isIdleAnimating) return
+        isIdleAnimating = true
+        idleFrameIndex = 0
+        scheduleNextIdleFrame()
+    }
+
+    private fun stopIdleAnimation() {
+        isIdleAnimating = false
+        mainHandler.removeCallbacksAndMessages(null)
+    }
+
+    private fun scheduleNextIdleFrame() {
+        if (!isIdleAnimating || currentMood != SparkMood.IDLE || isSpeaking) {
+            isIdleAnimating = false
+            return
+        }
+
+        mainHandler.postDelayed({
+            if (isIdleAnimating && currentMood == SparkMood.IDLE && !isSpeaking) {
+                idleFrameIndex = (idleFrameIndex + 1) % idleFrameNames.size
+
+                val frameName = idleFrameNames[idleFrameIndex]
+                val resId = resources.getIdentifier(frameName, "drawable", context.packageName)
+
+                if (resId != 0) {
+                    fairyImage.setImageResource(resId)
+                }
+
+                scheduleNextIdleFrame()
+            }
+        }, 280L) // ~3.5 fps breathing rate
+    }
+
     private fun pulseSmall() {
         val sx = ObjectAnimator.ofFloat(fairyImage, View.SCALE_X, fairyImage.scaleX, 1.06f, 1f)
         val sy = ObjectAnimator.ofFloat(fairyImage, View.SCALE_Y, fairyImage.scaleY, 1.06f, 1f)
@@ -200,6 +253,11 @@ class SparkOverlayAvatarView(context: Context) : FrameLayout(context) {
             interpolator = AccelerateDecelerateInterpolator()
             start()
         }
+    }
+
+    override fun onDetachedFromWindow() {
+        super.onDetachedFromWindow()
+        stopIdleAnimation()
     }
 }
 
