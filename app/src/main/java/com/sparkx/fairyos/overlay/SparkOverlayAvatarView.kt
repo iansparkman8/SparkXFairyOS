@@ -40,10 +40,13 @@ class SparkOverlayAvatarView(context: Context) : FrameLayout(context) {
     private var currentAssetName: String? = null
 
     private val mainHandler = Handler(Looper.getMainLooper())
-    private var idleFrameIndex = 0
-    private var isIdleAnimating = false
 
-    // Idle animation frames (add more files later for smoother breathing)
+    // === Idle Animation State ===
+    private var isIdleFrameCycling = false
+    private var idleFrameIndex = 0
+    private val idleFrameRateMs = 280L
+
+    // Idle frame names (base + optional numbered frames for breathing cycle)
     private val idleFrameNames = listOf(
         "spark_fairy_idle",
         "spark_fairy_idle_01",
@@ -81,8 +84,10 @@ class SparkOverlayAvatarView(context: Context) : FrameLayout(context) {
         fairyImage.setPadding(2, 2, 2, 2)
 
         applyMoodAsset()
-        startIdleFloat()
+        startContinuousFloatAnimation()
     }
+
+    // region Public API
 
     fun updateState(mood: SparkMood, speaking: Boolean) {
         updateState(mood, speaking, currentForm)
@@ -93,7 +98,7 @@ class SparkOverlayAvatarView(context: Context) : FrameLayout(context) {
         speaking: Boolean,
         form: SparkForm
     ) {
-        val changed = mood != currentMood || speaking != isSpeaking || form != currentForm
+        val moodOrSpeakingChanged = mood != currentMood || speaking != isSpeaking
 
         currentMood = mood
         isSpeaking = speaking
@@ -102,13 +107,14 @@ class SparkOverlayAvatarView(context: Context) : FrameLayout(context) {
         glowView.updateMood(mood, speaking)
         particleView.updateMood(mood, speaking)
 
-        if (changed) {
-            stopIdleAnimation()
+        if (moodOrSpeakingChanged) {
             applyMoodAsset()
             pulseSmall()
 
             if (mood == SparkMood.IDLE && !speaking) {
-                startIdleAnimation()
+                startIdleFrameCycling()
+            } else {
+                stopIdleFrameCycling()
             }
         }
     }
@@ -141,6 +147,10 @@ class SparkOverlayAvatarView(context: Context) : FrameLayout(context) {
         particleView.triggerBurst()
         pulseBig()
     }
+
+    // endregion
+
+    // region Asset & Mood Handling
 
     private fun applyMoodAsset() {
         val assetName = when {
@@ -177,7 +187,15 @@ class SparkOverlayAvatarView(context: Context) : FrameLayout(context) {
         }
     }
 
-    private fun startIdleFloat() {
+    // endregion
+
+    // region Animation System
+
+    /**
+     * Continuous gentle floating/bobbing animation (always running).
+     * This gives Spark Baby a living, breathing presence even without frame changes.
+     */
+    private fun startContinuousFloatAnimation() {
         fairyImage.animate()
             .translationY(-10f)
             .scaleX(1.035f)
@@ -191,32 +209,36 @@ class SparkOverlayAvatarView(context: Context) : FrameLayout(context) {
                     .scaleY(0.985f)
                     .setDuration(1450L)
                     .setInterpolator(AccelerateDecelerateInterpolator())
-                    .withEndAction { startIdleFloat() }
+                    .withEndAction { startContinuousFloatAnimation() }
                     .start()
             }
             .start()
     }
 
-    private fun startIdleAnimation() {
-        if (isIdleAnimating) return
-        isIdleAnimating = true
+    /**
+     * Starts cycling through idle frames for breathing effect.
+     * Only runs when mood is IDLE and not speaking.
+     */
+    private fun startIdleFrameCycling() {
+        if (isIdleFrameCycling) return
+        isIdleFrameCycling = true
         idleFrameIndex = 0
         scheduleNextIdleFrame()
     }
 
-    private fun stopIdleAnimation() {
-        isIdleAnimating = false
+    private fun stopIdleFrameCycling() {
+        isIdleFrameCycling = false
         mainHandler.removeCallbacksAndMessages(null)
     }
 
     private fun scheduleNextIdleFrame() {
-        if (!isIdleAnimating || currentMood != SparkMood.IDLE || isSpeaking) {
-            isIdleAnimating = false
+        if (!isIdleFrameCycling || currentMood != SparkMood.IDLE || isSpeaking) {
+            isIdleFrameCycling = false
             return
         }
 
         mainHandler.postDelayed({
-            if (isIdleAnimating && currentMood == SparkMood.IDLE && !isSpeaking) {
+            if (isIdleFrameCycling && currentMood == SparkMood.IDLE && !isSpeaking) {
                 idleFrameIndex = (idleFrameIndex + 1) % idleFrameNames.size
 
                 val frameName = idleFrameNames[idleFrameIndex]
@@ -228,7 +250,7 @@ class SparkOverlayAvatarView(context: Context) : FrameLayout(context) {
 
                 scheduleNextIdleFrame()
             }
-        }, 280L) // ~3.5 fps breathing rate
+        }, idleFrameRateMs)
     }
 
     private fun pulseSmall() {
@@ -257,8 +279,10 @@ class SparkOverlayAvatarView(context: Context) : FrameLayout(context) {
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
-        stopIdleAnimation()
+        stopIdleFrameCycling()
     }
+
+    // endregion
 }
 
 private class SparkOverlayGlowView(context: Context) : View(context) {
