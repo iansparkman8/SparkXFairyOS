@@ -6,9 +6,11 @@ import android.content.Context
 import android.graphics.BlurMaskFilter
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.ComposeShader
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.PorterDuff
 import android.graphics.RadialGradient
 import android.graphics.Shader
 import android.os.Handler
@@ -26,10 +28,7 @@ import kotlin.math.sin
 import kotlin.random.Random
 
 /**
- * Premium asset-backed overlay avatar renderer.
- *
- * This displays Spark Baby from transparent PNG/WebP assets instead of
- * drawing a weak procedural Canvas mascot.
+ * Premium asset-backed overlay avatar renderer with procedural iridescent wings.
  */
 class SparkOverlayAvatarView(context: Context) : FrameLayout(context) {
 
@@ -44,7 +43,6 @@ class SparkOverlayAvatarView(context: Context) : FrameLayout(context) {
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
-    // === Idle Animation State ===
     private var isIdleFrameCycling = false
     private var idleFrameIndex = 0
     private val idleFrameRateMs = 280L
@@ -64,10 +62,7 @@ class SparkOverlayAvatarView(context: Context) : FrameLayout(context) {
         isClickable = true
         isLongClickable = true
 
-        addView(
-            glowView,
-            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
-        )
+        addView(glowView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
 
         addView(
             fairyImage,
@@ -76,10 +71,7 @@ class SparkOverlayAvatarView(context: Context) : FrameLayout(context) {
             }
         )
 
-        addView(
-            particleView,
-            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
-        )
+        addView(particleView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
 
         fairyImage.scaleType = ImageView.ScaleType.FIT_CENTER
         fairyImage.adjustViewBounds = true
@@ -95,12 +87,8 @@ class SparkOverlayAvatarView(context: Context) : FrameLayout(context) {
         updateState(mood, speaking, currentForm)
     }
 
-    fun updateState(
-        mood: SparkMood,
-        speaking: Boolean,
-        form: SparkForm
-    ) {
-        val moodOrSpeakingChanged = mood != currentMood || speaking != isSpeaking
+    fun updateState(mood: SparkMood, speaking: Boolean, form: SparkForm) {
+        val changed = mood != currentMood || speaking != isSpeaking
 
         currentMood = mood
         isSpeaking = speaking
@@ -109,15 +97,12 @@ class SparkOverlayAvatarView(context: Context) : FrameLayout(context) {
         glowView.updateMood(mood, speaking)
         particleView.updateMood(mood, speaking)
 
-        if (moodOrSpeakingChanged) {
+        if (changed) {
             applyMoodAsset()
             pulseSmall()
 
-            if (mood == SparkMood.IDLE && !speaking) {
-                startIdleFrameCycling()
-            } else {
-                stopIdleFrameCycling()
-            }
+            if (mood == SparkMood.IDLE && !speaking) startIdleFrameCycling()
+            else stopIdleFrameCycling()
         }
     }
 
@@ -129,7 +114,6 @@ class SparkOverlayAvatarView(context: Context) : FrameLayout(context) {
 
     fun updateMotion(vx: Float, vy: Float) {
         particleView.updateMotion(vx, vy)
-
         fairyImage.rotation = (vx / 40f * 5f).coerceIn(-7f, 7f)
         fairyImage.translationX = (vx / 40f * 5f).coerceIn(-6f, 6f)
         fairyImage.translationY = (vy / 40f * 3f).coerceIn(-4f, 4f)
@@ -152,7 +136,7 @@ class SparkOverlayAvatarView(context: Context) : FrameLayout(context) {
 
     // endregion
 
-    // region Asset & Mood Handling
+    // region Asset Handling
 
     private fun applyMoodAsset() {
         val assetName = when {
@@ -169,29 +153,21 @@ class SparkOverlayAvatarView(context: Context) : FrameLayout(context) {
 
         if (assetName != currentAssetName) {
             currentAssetName = assetName
-            fairyImage.alpha = 0.18f
+            fairyImage.alpha = 0.15f
 
-            if (resId != 0) {
-                fairyImage.setImageResource(resId)
-                fairyImage.contentDescription = "Spark Baby ${currentMood.name.lowercase()} avatar"
-            } else {
-                fairyImage.setImageResource(android.R.drawable.star_big_on)
-                fairyImage.contentDescription = "Missing Spark Baby asset: $assetName"
-            }
+            fairyImage.setImageResource(if (resId != 0) resId else android.R.drawable.star_big_on)
 
-            ObjectAnimator.ofFloat(fairyImage, View.ALPHA, 0.18f, 1f).apply {
-                duration = 240L
+            ObjectAnimator.ofFloat(fairyImage, View.ALPHA, 0.15f, 1f).apply {
+                duration = 220L
                 interpolator = AccelerateDecelerateInterpolator()
                 start()
             }
-        } else if (resId == 0) {
-            fairyImage.setImageResource(android.R.drawable.star_big_on)
         }
     }
 
     // endregion
 
-    // region Animation System
+    // region Animation
 
     private fun startContinuousFloatAnimation() {
         fairyImage.animate()
@@ -234,25 +210,19 @@ class SparkOverlayAvatarView(context: Context) : FrameLayout(context) {
         mainHandler.postDelayed({
             if (isIdleFrameCycling && currentMood == SparkMood.IDLE && !isSpeaking) {
                 idleFrameIndex = (idleFrameIndex + 1) % idleFrameNames.size
-
-                val frameName = idleFrameNames[idleFrameIndex]
-                val resId = resources.getIdentifier(frameName, "drawable", context.packageName)
-
-                if (resId != 0) {
-                    fairyImage.setImageResource(resId)
-                }
-
+                val resId = resources.getIdentifier(idleFrameNames[idleFrameIndex], "drawable", context.packageName)
+                if (resId != 0) fairyImage.setImageResource(resId)
                 scheduleNextIdleFrame()
             }
         }, idleFrameRateMs)
     }
 
     private fun pulseSmall() {
-        val sx = ObjectAnimator.ofFloat(fairyImage, View.SCALE_X, fairyImage.scaleX, 1.06f, 1f)
-        val sy = ObjectAnimator.ofFloat(fairyImage, View.SCALE_Y, fairyImage.scaleY, 1.06f, 1f)
-
         AnimatorSet().apply {
-            playTogether(sx, sy)
+            playTogether(
+                ObjectAnimator.ofFloat(fairyImage, View.SCALE_X, fairyImage.scaleX, 1.06f, 1f),
+                ObjectAnimator.ofFloat(fairyImage, View.SCALE_Y, fairyImage.scaleY, 1.06f, 1f)
+            )
             duration = 260L
             interpolator = AccelerateDecelerateInterpolator()
             start()
@@ -260,11 +230,11 @@ class SparkOverlayAvatarView(context: Context) : FrameLayout(context) {
     }
 
     private fun pulseBig() {
-        val sx = ObjectAnimator.ofFloat(fairyImage, View.SCALE_X, fairyImage.scaleX, 1.16f, 1f)
-        val sy = ObjectAnimator.ofFloat(fairyImage, View.SCALE_Y, fairyImage.scaleY, 1.16f, 1f)
-
         AnimatorSet().apply {
-            playTogether(sx, sy)
+            playTogether(
+                ObjectAnimator.ofFloat(fairyImage, View.SCALE_X, fairyImage.scaleX, 1.16f, 1f),
+                ObjectAnimator.ofFloat(fairyImage, View.SCALE_Y, fairyImage.scaleY, 1.16f, 1f)
+            )
             duration = 340L
             interpolator = AccelerateDecelerateInterpolator()
             start()
@@ -277,25 +247,40 @@ class SparkOverlayAvatarView(context: Context) : FrameLayout(context) {
     }
 
     // endregion
+
+    // region Drawing - Procedural Iridescent Wings
+
+    override fun dispatchDraw(canvas: Canvas) {
+        // Draw procedural iridescent wings behind the body
+        val cx = width / 2f
+        val cy = height / 2f + 18f
+
+        ProceduralWingRenderer.drawWings(
+            canvas = canvas,
+            cx = cx,
+            cy = cy,
+            width = width.toFloat(),
+            height = height.toFloat(),
+            mood = currentMood,
+            isSpeaking = isSpeaking,
+            time = SystemClock.uptimeMillis() / 1000f
+        )
+
+        super.dispatchDraw(canvas)
+    }
+
+    // endregion
 }
 
 // ========================================================
-// PROCEDURAL WING RENDERER (High Quality + Mood Reactive)
+// PROCEDURAL IRIDESCENT WING RENDERER (Shader-based)
 // ========================================================
 
-/**
- * Draws beautiful procedural holographic wings.
- * Layered gradients + veins + iridescence + mood reactivity.
- *
- * This is designed to be called from a custom View's onDraw().
- */
 object ProceduralWingRenderer {
 
     private val wingPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val veinPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-
-    private var lastPhase = 0f
 
     fun drawWings(
         canvas: Canvas,
@@ -308,60 +293,48 @@ object ProceduralWingRenderer {
         time: Float
     ) {
         val unit = width / 220f
-        val phase = time * 1.8f
+        val phase = time * 2.1f
 
-        // Mood-based color palette
-        val primary = when {
-            isSpeaking -> Color.rgb(125, 211, 252)
-            mood == SparkMood.HAPPY -> Color.rgb(180, 220, 255)
-            mood == SparkMood.THINKING -> Color.rgb(140, 180, 255)
-            mood == SparkMood.LISTENING -> Color.rgb(100, 220, 240)
-            mood == SparkMood.ALERT -> Color.rgb(120, 160, 255)
-            mood == SparkMood.SLEEPY -> Color.rgb(160, 180, 220)
-            else -> Color.rgb(140, 200, 255)
+        val colorA = when {
+            isSpeaking -> Color.rgb(100, 200, 255)
+            mood == SparkMood.HAPPY -> Color.rgb(170, 210, 255)
+            mood == SparkMood.THINKING -> Color.rgb(130, 180, 255)
+            mood == SparkMood.LISTENING -> Color.rgb(90, 210, 255)
+            mood == SparkMood.ALERT -> Color.rgb(140, 150, 255)
+            mood == SparkMood.SLEEPY -> Color.rgb(150, 170, 220)
+            else -> Color.rgb(140, 195, 255)
         }
 
-        val secondary = when {
-            isSpeaking -> Color.rgb(180, 140, 255)
-            mood == SparkMood.HAPPY -> Color.rgb(200, 160, 255)
-            mood == SparkMood.THINKING -> Color.rgb(120, 200, 255)
-            mood == SparkMood.LISTENING -> Color.rgb(80, 220, 255)
-            mood == SparkMood.ALERT -> Color.rgb(200, 120, 180)
-            mood == SparkMood.SLEEPY -> Color.rgb(180, 190, 230)
-            else -> Color.rgb(150, 200, 255)
+        val colorB = when {
+            isSpeaking -> Color.rgb(200, 130, 255)
+            mood == SparkMood.HAPPY -> Color.rgb(220, 170, 255)
+            mood == SparkMood.THINKING -> Color.rgb(110, 200, 255)
+            mood == SparkMood.LISTENING -> Color.rgb(80, 230, 255)
+            mood == SparkMood.ALERT -> Color.rgb(230, 120, 200)
+            mood == SparkMood.SLEEPY -> Color.rgb(170, 180, 230)
+            else -> Color.rgb(160, 200, 255)
         }
 
-        val wingAlpha = when {
-            isSpeaking -> 0.85f
-            mood == SparkMood.HAPPY -> 0.78f
-            mood == SparkMood.SLEEPY -> 0.55f
-            else -> 0.68f
+        val alphaMult = when {
+            isSpeaking -> 0.92f
+            mood == SparkMood.HAPPY -> 0.85f
+            mood == SparkMood.SLEEPY -> 0.60f
+            else -> 0.75f
         }
 
-        // === LEFT WING (Upper + Lower) ===
-        drawSingleWing(
-            canvas, cx - 38f * unit, cy - 8f * unit,
-            scaleX = -1f, scaleY = 1f,
-            primary, secondary, wingAlpha, phase, unit, mood, isSpeaking
-        )
-
-        // === RIGHT WING (Upper + Lower) ===
-        drawSingleWing(
-            canvas, cx + 38f * unit, cy - 8f * unit,
-            scaleX = 1f, scaleY = 1f,
-            primary, secondary, wingAlpha, phase, unit, mood, isSpeaking
-        )
+        drawIridescentWing(canvas, cx - 42f * unit, cy - 6f * unit, -1f, 1f, colorA, colorB, alphaMult, phase, unit, mood, isSpeaking)
+        drawIridescentWing(canvas, cx + 42f * unit, cy - 6f * unit,  1f, 1f, colorA, colorB, alphaMult, phase, unit, mood, isSpeaking)
     }
 
-    private fun drawSingleWing(
+    private fun drawIridescentWing(
         canvas: Canvas,
         cx: Float,
         cy: Float,
         scaleX: Float,
         scaleY: Float,
-        primary: Int,
-        secondary: Int,
-        alpha: Float,
+        colorA: Int,
+        colorB: Int,
+        alphaMult: Float,
         phase: Float,
         unit: Float,
         mood: SparkMood,
@@ -369,79 +342,92 @@ object ProceduralWingRenderer {
     ) {
         val p = Path()
 
-        // Wing shape (large elegant wing)
         p.moveTo(cx, cy)
         p.cubicTo(
-            cx + 85f * scaleX * unit, cy - 45f * scaleY * unit,
-            cx + 120f * scaleX * unit, cy - 95f * scaleY * unit,
-            cx + 95f * scaleX * unit, cy - 145f * scaleY * unit
+            cx + 92f * scaleX * unit, cy - 52f * scaleY * unit,
+            cx + 128f * scaleX * unit, cy - 105f * scaleY * unit,
+            cx + 98f * scaleX * unit, cy - 158f * scaleY * unit
         )
         p.cubicTo(
-            cx + 70f * scaleX * unit, cy - 175f * scaleY * unit,
-            cx + 25f * scaleX * unit, cy - 155f * scaleY * unit,
-            cx, cy - 115f * scaleY * unit
+            cx + 68f * scaleX * unit, cy - 188f * scaleY * unit,
+            cx + 22f * scaleX * unit, cy - 168f * scaleY * unit,
+            cx, cy - 122f * scaleY * unit
         )
         p.close()
 
-        // Base wing fill with gradient
-        wingPaint.shader = LinearGradient(
-            cx - 40f * scaleX * unit, cy - 160f * scaleY * unit,
-            cx + 110f * scaleX * unit, cy + 20f * scaleY * unit,
+        // Base gradient
+        val baseGradient = LinearGradient(
+            cx - 50f * scaleX * unit, cy - 170f * scaleY * unit,
+            cx + 115f * scaleX * unit, cy + 15f * scaleY * unit,
             intArrayOf(
-                Color.argb((255 * alpha * 0.7f).toInt(), Color.red(primary), Color.green(primary), Color.blue(primary)),
-                Color.argb((255 * alpha * 0.95f).toInt(), Color.red(secondary), Color.green(secondary), Color.blue(secondary)),
-                Color.argb((255 * alpha * 0.65f).toInt(), Color.red(primary), Color.green(primary), Color.blue(primary))
+                Color.argb((255 * alphaMult * 0.65f).toInt(), Color.red(colorA), Color.green(colorA), Color.blue(colorA)),
+                Color.argb((255 * alphaMult * 0.92f).toInt(), Color.red(colorB), Color.green(colorB), Color.blue(colorB)),
+                Color.argb((255 * alphaMult * 0.70f).toInt(), Color.red(colorA), Color.green(colorA), Color.blue(colorA))
             ),
-            floatArrayOf(0f, 0.45f, 1f),
+            floatArrayOf(0f, 0.48f, 1f),
             Shader.TileMode.CLAMP
         )
+
+        // Animated iridescence layer
+        val shift = sin(phase) * 28f * unit
+        val iridescentGradient = LinearGradient(
+            cx - 30f * scaleX * unit + shift, cy - 155f * scaleY * unit,
+            cx + 95f * scaleX * unit + shift * 0.6f, cy + 25f * scaleY * unit,
+            intArrayOf(
+                Color.argb(0, 255, 255, 255),
+                Color.argb((255 * alphaMult * 0.38f).toInt(), 255, 255, 255),
+                Color.argb(0, 255, 255, 255)
+            ),
+            floatArrayOf(0f, 0.5f, 1f),
+            Shader.TileMode.CLAMP
+        )
+
+        wingPaint.shader = ComposeShader(baseGradient, iridescentGradient, PorterDuff.Mode.SRC_OVER)
         wingPaint.style = Paint.Style.FILL
         canvas.drawPath(p, wingPaint)
 
         // Edge highlight
         wingPaint.shader = null
-        wingPaint.color = Color.argb((255 * alpha * 0.6f).toInt(), 255, 255, 255)
+        wingPaint.color = Color.argb((255 * alphaMult * 0.55f).toInt(), 255, 255, 255)
         wingPaint.style = Paint.Style.STROKE
-        wingPaint.strokeWidth = 2.5f * unit
+        wingPaint.strokeWidth = 2.8f * unit
         canvas.drawPath(p, wingPaint)
 
-        // === Wing Veins ===
-        veinPaint.color = Color.argb((255 * alpha * 0.35f).toInt(), 200, 230, 255)
-        veinPaint.strokeWidth = 1.2f * unit
+        // Veins
+        veinPaint.color = Color.argb((255 * alphaMult * 0.32f).toInt(), 210, 235, 255)
+        veinPaint.strokeWidth = 1.15f * unit
         veinPaint.style = Paint.Style.STROKE
 
-        // Main vein lines
-        for (i in 0..4) {
-            val t = i / 4f
-            val startX = cx + (20f + t * 35f) * scaleX * unit
-            val startY = cy - (30f + t * 60f) * scaleY * unit
-            val endX = cx + (55f + t * 25f) * scaleX * unit
-            val endY = cy - (90f + t * 35f) * scaleY * unit
-
+        for (i in 0..5) {
+            val t = i / 5f
+            val startX = cx + (18f + t * 38f) * scaleX * unit
+            val startY = cy - (28f + t * 68f) * scaleY * unit
+            val endX = cx + (52f + t * 28f) * scaleX * unit
+            val endY = cy - (85f + t * 38f) * scaleY * unit
             canvas.drawLine(startX, startY, endX, endY, veinPaint)
         }
 
-        // Subtle inner glow layer
+        // Inner glow
         glowPaint.shader = RadialGradient(
-            cx + 45f * scaleX * unit,
-            cy - 90f * scaleY * unit,
-            85f * unit,
-            Color.argb((255 * alpha * 0.25f).toInt(), Color.red(secondary), Color.green(secondary), Color.blue(secondary)),
+            cx + 48f * scaleX * unit,
+            cy - 95f * scaleY * unit,
+            92f * unit,
+            Color.argb((255 * alphaMult * 0.28f).toInt(), Color.red(colorB), Color.green(colorB), Color.blue(colorB)),
             Color.TRANSPARENT,
             Shader.TileMode.CLAMP
         )
         glowPaint.style = Paint.Style.FILL
         canvas.drawPath(p, glowPaint)
 
-        // Extra shimmer when speaking or happy
+        // Extra shimmer
         if (isSpeaking || mood == SparkMood.HAPPY) {
-            val shimmerPhase = (phase * 2.2f) % 6.28f
+            val shimmerPhase = phase * 3.4f
             glowPaint.shader = LinearGradient(
-                cx - 30f * scaleX * unit + cos(shimmerPhase) * 40f * unit,
-                cy - 140f * scaleY * unit,
-                cx + 80f * scaleX * unit + sin(shimmerPhase) * 30f * unit,
-                cy + 10f * scaleY * unit,
-                Color.argb(45, 255, 255, 255),
+                cx - 25f * scaleX * unit + cos(shimmerPhase) * 55f * unit,
+                cy - 150f * scaleY * unit,
+                cx + 85f * scaleX * unit + sin(shimmerPhase) * 35f * unit,
+                cy + 20f * scaleY * unit,
+                Color.argb(38, 255, 255, 255),
                 Color.TRANSPARENT,
                 Shader.TileMode.CLAMP
             )
@@ -502,9 +488,7 @@ private class SparkOverlayGlowView(context: Context) : View(context) {
         }
 
         paint.shader = RadialGradient(
-            cx,
-            cy,
-            width * 0.47f * pulse,
+            cx, cy, width * 0.47f * pulse,
             intArrayOf(
                 Color.argb(alpha, Color.red(base), Color.green(base), Color.blue(base)),
                 Color.argb(alpha / 2, 191, 199, 213),
@@ -528,12 +512,7 @@ private class SparkOverlayGlowView(context: Context) : View(context) {
 
         paint.style = Paint.Style.STROKE
         paint.strokeWidth = if (speaking) 3.4f else 2.2f
-        paint.color = Color.argb(
-            ringAlpha,
-            Color.red(base),
-            Color.green(base),
-            Color.blue(base)
-        )
+        paint.color = Color.argb(ringAlpha, Color.red(base), Color.green(base), Color.blue(base))
         canvas.drawCircle(cx, cy, width * (0.34f + ringPulse * 0.035f), paint)
 
         if (speaking || mood == SparkMood.LISTENING) {
@@ -546,8 +525,8 @@ private class SparkOverlayGlowView(context: Context) : View(context) {
             paint.strokeWidth = 1.8f
             paint.color = Color.argb(120, 125, 211, 252)
             val orbit = time * 2.2f
-            repeat(3) { index ->
-                val angle = orbit + index * 2.094f
+            repeat(3) { i ->
+                val angle = orbit + i * 2.094f
                 val x = cx + cos(angle) * width * 0.30f
                 val y = cy + sin(angle) * width * 0.30f
                 canvas.drawCircle(x, y, 4.2f, paint)
@@ -555,7 +534,6 @@ private class SparkOverlayGlowView(context: Context) : View(context) {
         }
 
         paint.style = Paint.Style.FILL
-
         postInvalidateOnAnimation()
     }
 }
@@ -571,19 +549,14 @@ private class SparkOverlayParticleView(context: Context) : View(context) {
     private var motionVy: Float = 0f
     private var burstAt: Long = 0L
 
-    private data class ParticleSeed(
-        val angle: Float,
-        val radius: Float,
-        val speed: Float,
-        val size: Float
-    )
+    private data class ParticleSeed(val angle: Float, val radius: Float, val speed: Float, val size: Float)
 
     private val seeds = List(32) {
         ParticleSeed(
-            angle = Random.nextFloat() * 6.283f,
-            radius = 0.14f + Random.nextFloat() * 0.42f,
-            speed = 0.45f + Random.nextFloat() * 1.9f,
-            size = 1.0f + Random.nextFloat() * 2.8f
+            Random.nextFloat() * 6.283f,
+            0.14f + Random.nextFloat() * 0.42f,
+            0.45f + Random.nextFloat() * 1.9f,
+            1.0f + Random.nextFloat() * 2.8f
         )
     }
 
@@ -639,45 +612,28 @@ private class SparkOverlayParticleView(context: Context) : View(context) {
             val seed = seeds[i]
             val angle = seed.angle + time * seed.speed
             val radius = width * seed.radius
-
             val driftX = -motionVx * 0.22f
             val driftY = -motionVy * 0.12f
 
             val x = cx + cos(angle) * radius + driftX
             val y = cy + sin(angle * 0.86f) * radius + driftY
-
             val twinkle = ((sin(time * 5f + i) + 1f) * 0.5f)
             val alpha = (55 + twinkle * 170).toInt()
 
-            paint.color = Color.argb(
-                alpha,
-                Color.red(color),
-                Color.green(color),
-                Color.blue(color)
-            )
-
+            paint.color = Color.argb(alpha, Color.red(color), Color.green(color), Color.blue(color))
             canvas.drawCircle(x, y, seed.size * twinkle + 0.8f, paint)
         }
 
-        drawBurst(canvas, color)
+        val age = System.currentTimeMillis() - burstAt
+        if (age in 0..620) {
+            val progress = age / 620f
+            paint.style = Paint.Style.STROKE
+            paint.strokeWidth = (5.5f * (1f - progress)).coerceAtLeast(0.7f)
+            paint.color = Color.argb(((1f - progress) * 220).toInt(), Color.red(color), Color.green(color), Color.blue(color))
+            canvas.drawCircle(cx, cy, width * (0.13f + 0.42f * progress), paint)
+            paint.style = Paint.Style.FILL
+        }
 
         postInvalidateOnAnimation()
-    }
-
-    private fun drawBurst(canvas: Canvas, color: Int) {
-        val age = System.currentTimeMillis() - burstAt
-        if (age !in 0..620) return
-
-        val progress = age / 620f
-        val cx = width / 2f
-        val cy = height / 2f
-        val radius = width * (0.13f + 0.42f * progress)
-        val alpha = ((1f - progress) * 220).toInt().coerceIn(0, 220)
-
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = (5.5f * (1f - progress)).coerceAtLeast(0.7f)
-        paint.color = Color.argb(alpha, Color.red(color), Color.green(color), Color.blue(color))
-        canvas.drawCircle(cx, cy, radius, paint)
-        paint.style = Paint.Style.FILL
     }
 }
