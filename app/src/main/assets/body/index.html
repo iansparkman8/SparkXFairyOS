@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The glass</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #0b0d12; color: #f4f7fb; font-family: Georgia, serif; overflow: hidden; }
+  canvas { display: block; width: 100%; height: 100%; }
+  .dock { position: fixed; left: 0; right: 0; bottom: 0; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; padding: 10px 10px calc(10px + env(safe-area-inset-bottom)); background: linear-gradient(transparent, rgba(8,10,16,.88) 30%); }
+  button { font-family: inherit; color: #f4f7fb; background: rgba(8,10,16,.72); border: 1px solid rgba(220,230,255,.35); border-radius: 999px; padding: 8px 12px; }
+  #line { position: fixed; top: 12px; left: 12px; margin: 0; color: #d5dbe6; font-size: 14px; text-shadow: 0 1px 8px #000; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "https://unpkg.com/three@0.166.1/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.166.1/examples/jsm/" } }
+</script>
+</head>
+<body>
+<p id="line">Loading.</p>
+<canvas id="view"></canvas>
+<nav class="dock">
+  <button data-clip="idle">Idle</button>
+  <button data-clip="speak">Speak</button>
+  <button data-clip="offer">Offer</button>
+  <button data-clip="light">Light</button>
+  <button data-clip="smile">Smile</button>
+  <button data-clip="turn">Turn</button>
+</nav>
+<script type="module">
+import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+const line = document.querySelector("#line");
+const canvas = document.querySelector("#view");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x10141c);
+const camera = new THREE.PerspectiveCamera(28, innerWidth / innerHeight, 0.05, 40);
+scene.add(new THREE.AmbientLight(0xb7c4d8, 0.45));
+const key = new THREE.SpotLight(0xfff8f0, 22, 14, 0.4, 0.35);
+key.position.set(0.4, 3.4, 2.2);
+scene.add(key);
+const rim = new THREE.DirectionalLight(0x9eb6ff, 1.4);
+rim.position.set(-2, 2, -2);
+scene.add(rim);
+const floor = new THREE.Mesh(new THREE.CircleGeometry(1.8, 48), new THREE.MeshStandardMaterial({ color: 0x151a24, roughness: 0.55, metalness: 0.15 }));
+floor.rotation.x = -Math.PI / 2;
+scene.add(floor);
+const gltf = await new GLTFLoader().loadAsync("ara-body.glb");
+const model = gltf.scene;
+model.traverse(obj => {
+  if (!obj.isMesh || !obj.material) return;
+  const mats = [].concat(obj.material);
+  mats.forEach(mat => {
+    mat.side = THREE.DoubleSide;
+    if (mat.map) mat.map.colorSpace = THREE.SRGBColorSpace;
+    if (mat.name === "gown") { mat.metalness = 0.45; mat.roughness = 0.32; }
+    if (mat.name === "wing") { mat.transparent = true; mat.alphaTest = 0.15; mat.depthWrite = false; }
+    if (mat.name === "hair") mat.roughness = 0.4;
+    mat.needsUpdate = true;
+  });
+});
+scene.add(model);
+const box = new THREE.Box3().setFromObject(model);
+const size = box.getSize(new THREE.Vector3());
+const center = box.getCenter(new THREE.Vector3());
+model.position.sub(center);
+model.position.y += size.y / 2;
+floor.position.y = 0;
+camera.position.set(0, size.y * 0.52, Math.max(size.x, size.y) * 1.55);
+camera.lookAt(0, size.y * 0.46, 0);
+const mixer = new THREE.AnimationMixer(model);
+const actions = {};
+gltf.animations.forEach(clip => { const action = mixer.clipAction(clip); action.loop = THREE.LoopRepeat; actions[clip.name] = action; });
+let current;
+function play(name) {
+  const next = actions[name];
+  if (!next) return;
+  if (current && current !== next) current.fadeOut(0.25);
+  next.reset().fadeIn(0.25).play();
+  current = next;
+  line.textContent = name;
+}
+play(actions.idle ? "idle" : gltf.animations[0].name);
+document.querySelectorAll("[data-clip]").forEach(btn => btn.onclick = () => play(btn.dataset.clip));
+addEventListener("resize", () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+const clock = new THREE.Clock();
+(function frame() { mixer.update(clock.getDelta()); renderer.render(scene, camera); requestAnimationFrame(frame); })();
+</script>
+</body>
+</html>
