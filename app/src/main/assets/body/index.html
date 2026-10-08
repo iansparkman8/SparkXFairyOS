@@ -2,23 +2,23 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>The glass</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Body</title>
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; background: #0b0d12; color: #f4f7fb; font-family: Georgia, serif; overflow: hidden; }
-  canvas { display: block; width: 100%; height: 100%; }
-  .dock { position: fixed; left: 0; right: 0; bottom: 0; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; padding: 10px 10px calc(10px + env(safe-area-inset-bottom)); background: linear-gradient(transparent, rgba(8,10,16,.88) 30%); }
-  button { font-family: inherit; color: #f4f7fb; background: rgba(8,10,16,.72); border: 1px solid rgba(220,230,255,.35); border-radius: 999px; padding: 8px 12px; }
-  #line { position: fixed; top: 12px; left: 12px; margin: 0; color: #d5dbe6; font-size: 14px; text-shadow: 0 1px 8px #000; }
+  html, body { margin: 0; height: 100%; background: #0b0d12; color: #f7f4ee; font-family: Georgia, serif; overflow: hidden; }
+  canvas { width: 100%; height: 100%; display: block; }
+  #line { position: fixed; top: 14px; left: 14px; right: 14px; margin: 0; font-size: 15px; text-shadow: 0 1px 8px #000; }
+  .dock { position: fixed; left: 0; right: 0; bottom: 0; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; padding: 12px 12px calc(12px + env(safe-area-inset-bottom)); background: linear-gradient(transparent, rgba(8,10,16,.9) 28%); }
+  button { font: inherit; color: #f7f4ee; background: rgba(8,10,16,.7); border: 1px solid rgba(236,228,214,.35); border-radius: 999px; padding: 8px 12px; }
 </style>
 <script type="importmap">
 { "imports": { "three": "https://unpkg.com/three@0.166.1/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.166.1/examples/jsm/" } }
 </script>
 </head>
 <body>
-<p id="line">Loading.</p>
+<p id="line">Opening.</p>
 <canvas id="view"></canvas>
 <nav class="dock">
   <button data-clip="idle">Idle</button>
@@ -32,37 +32,42 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 const line = document.querySelector("#line");
-const canvas = document.querySelector("#view");
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+const said = { idle: "I am here.", speak: "Physics first. Then the body.", offer: "I can hold a line for you.", light: "The wings are the light.", smile: "I kept that.", turn: "This turn is bones." };
+function talk(text) {
+  line.textContent = text;
+  const notes = JSON.parse(localStorage.getItem("body-notes") || "[]");
+  notes.unshift({ text, at: Date.now() });
+  localStorage.setItem("body-notes", JSON.stringify(notes.slice(0, 20)));
+  if (!window.speechSynthesis) return;
+  speechSynthesis.cancel();
+  const voice = new SpeechSynthesisUtterance(text);
+  voice.rate = 0.92;
+  speechSynthesis.speak(voice);
+}
+const renderer = new THREE.WebGLRenderer({ canvas: document.querySelector("#view"), antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.05;
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x10141c);
 const camera = new THREE.PerspectiveCamera(28, innerWidth / innerHeight, 0.05, 40);
-scene.add(new THREE.AmbientLight(0xb7c4d8, 0.45));
-const key = new THREE.SpotLight(0xfff8f0, 22, 14, 0.4, 0.35);
-key.position.set(0.4, 3.4, 2.2);
+scene.add(new THREE.AmbientLight(0xb7c4d8, 0.5));
+const key = new THREE.SpotLight(0xfff6ea, 24, 14, 0.38, 0.3);
+key.position.set(0.5, 3.2, 2.2);
 scene.add(key);
-const rim = new THREE.DirectionalLight(0x9eb6ff, 1.4);
-rim.position.set(-2, 2, -2);
-scene.add(rim);
-const floor = new THREE.Mesh(new THREE.CircleGeometry(1.8, 48), new THREE.MeshStandardMaterial({ color: 0x151a24, roughness: 0.55, metalness: 0.15 }));
+scene.add(new THREE.DirectionalLight(0x9eb6ff, 1.2));
+const floor = new THREE.Mesh(new THREE.CircleGeometry(1.6, 40), new THREE.MeshStandardMaterial({ color: 0x161b24, roughness: 0.6 }));
 floor.rotation.x = -Math.PI / 2;
 scene.add(floor);
 const gltf = await new GLTFLoader().loadAsync("ara-body.glb");
 const model = gltf.scene;
 model.traverse(obj => {
-  if (!obj.isMesh || !obj.material) return;
-  const mats = [].concat(obj.material);
+  if (!obj.isMesh) return;
+  const mats = [].concat(obj.material || []);
   mats.forEach(mat => {
-    mat.side = THREE.DoubleSide;
     if (mat.map) mat.map.colorSpace = THREE.SRGBColorSpace;
-    if (mat.name === "gown") { mat.metalness = 0.45; mat.roughness = 0.32; }
-    if (mat.name === "wing") { mat.transparent = true; mat.alphaTest = 0.15; mat.depthWrite = false; }
-    if (mat.name === "hair") mat.roughness = 0.4;
+    if (mat.name === "wing") { mat.transparent = true; mat.alphaTest = 0.12; mat.depthWrite = false; mat.side = THREE.DoubleSide; }
     mat.needsUpdate = true;
   });
 });
@@ -72,22 +77,21 @@ const size = box.getSize(new THREE.Vector3());
 const center = box.getCenter(new THREE.Vector3());
 model.position.sub(center);
 model.position.y += size.y / 2;
-floor.position.y = 0;
-camera.position.set(0, size.y * 0.52, Math.max(size.x, size.y) * 1.55);
-camera.lookAt(0, size.y * 0.46, 0);
+camera.position.set(0, size.y * 0.5, Math.max(size.y, 1) * 1.6);
+camera.lookAt(0, size.y * 0.45, 0);
 const mixer = new THREE.AnimationMixer(model);
 const actions = {};
-gltf.animations.forEach(clip => { const action = mixer.clipAction(clip); action.loop = THREE.LoopRepeat; actions[clip.name] = action; });
+gltf.animations.forEach(clip => { actions[clip.name] = mixer.clipAction(clip); });
 let current;
 function play(name) {
   const next = actions[name];
-  if (!next) return;
-  if (current && current !== next) current.fadeOut(0.25);
-  next.reset().fadeIn(0.25).play();
+  if (!next) return talk("That clip is missing.");
+  if (current && current !== next) current.fadeOut(0.2);
+  next.reset().fadeIn(0.2).play();
   current = next;
-  line.textContent = name;
+  talk(said[name] || name);
 }
-play(actions.idle ? "idle" : gltf.animations[0].name);
+play(actions.idle ? "idle" : Object.keys(actions)[0]);
 document.querySelectorAll("[data-clip]").forEach(btn => btn.onclick = () => play(btn.dataset.clip));
 addEventListener("resize", () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
 const clock = new THREE.Clock();
