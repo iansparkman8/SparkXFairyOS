@@ -42,6 +42,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.*
 import com.sparkx.fairyos.domain.command.SparkCommandRouter
+import com.sparkx.fairyos.domain.companion.CoreSeal
 import com.sparkx.fairyos.domain.memory.TeachGrowEntry
 import com.sparkx.fairyos.domain.mood.SparkMood
 import com.sparkx.fairyos.domain.personality.SparkGrowthState
@@ -66,6 +67,10 @@ class MainActivity : ComponentActivity() {
     private var isSpeaking by mutableStateOf(false)
     private var isListening by mutableStateOf(false)
     private var isOwnerMode by mutableStateOf(false)
+    private var coreOpen by mutableStateOf(false)
+    private var pendingLabel by mutableStateOf("")
+    private var pendingAction by mutableStateOf<(() -> Unit)?>(null)
+    private var ownerError by mutableStateOf<String?>(null)
     private var overlayVisible by mutableStateOf(false)
     private var commandInput by mutableStateOf("")
     private var teachEntries = mutableStateListOf<TeachGrowEntry>()
@@ -84,7 +89,10 @@ class MainActivity : ComponentActivity() {
 
         val prefs = getSharedPreferences("sparkx_prefs", MODE_PRIVATE)
         hasAcceptedTerms = prefs.getBoolean("spark_terms_accepted", false)
-        isOwnerMode = prefs.getBoolean("owner_mode", false)
+        // Core is session-only. A stored flag must not boot Owner Mode.
+        isOwnerMode = false
+        coreOpen = false
+        prefs.edit().putBoolean("owner_mode", false).apply()
 
         val app = application as SparkXApplication
         val repo = app.teachGrowRepository
@@ -226,8 +234,12 @@ class MainActivity : ComponentActivity() {
                         onCommandInputChange = { commandInput = it },
                         onSendCommand = { processTextCommand(it) },
                         onMicClick = { toggleListening() },
-                        onToggleOwnerMode = { toggleOwnerMode() },
+                        onToggleOwnerMode = { if (isOwnerMode || coreOpen) closeCore() },
                         onToggleOverlay = { if (overlayVisible) hideOverlay() else showOverlay() },
+                        coreOpen = coreOpen,
+                        ownerError = ownerError,
+                        onOpenCore = { seal -> openCore(seal) },
+                        onCloseCore = { closeCore() },
                         teachEntries = teachEntries,
                         onAddTeachEntry = onAddTeachEntry,
                         onUpdateTeachEntry = onUpdateTeachEntry,
@@ -249,16 +261,66 @@ class MainActivity : ComponentActivity() {
                             voiceController.speak("I'm here.")
                         }
                     )
+                    if (pendingAction != null && coreOpen && isOwnerMode) {
+                        AlertDialog(
+                            onDismissRequest = { pendingAction = null },
+                            title = { Text("Confirm") },
+                            text = { Text(pendingLabel.ifBlank { "Do this?" }) },
+                            confirmButton = {
+                                TextButton(onClick = {
+                                    val action = pendingAction
+                                    pendingAction = null
+                                    if (!coreOpen || !isOwnerMode) return@TextButton
+                                    try {
+                                        action?.invoke()
+                                        voiceController.speak("Done.")
+                                    } catch (_: Exception) {
+                                        coreOpen = false
+                                        isOwnerMode = false
+                                        ownerError = "Owner Mode failed. Safe Companion is still on."
+                                        try {
+                                            voiceController.speak("That failed. Safe Companion is still here.")
+                                        } catch (_: Exception) {}
+                                    }
+                                }) { Text("Confirm") }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { pendingAction = null }) { Text("Not now") }
+                            }
+                        )
+                    }
                 }
             }
         }
     }
 
-    private fun toggleOwnerMode() {
-        isOwnerMode = !isOwnerMode
-        getSharedPreferences("sparkx_prefs", MODE_PRIVATE).edit()
-            .putBoolean("owner_mode", isOwnerMode).apply()
-        voiceController.speak(if (isOwnerMode) "Owner Mode activated. Advanced controls enabled with your confirmation." else "Owner Mode disabled. Back to safe companion mode.")
+    private fun openCore(seal: String) {
+        val ok = try {
+            CoreSeal.matches(seal)
+        } catch (_: Exception) {
+            false
+        }
+        if (!ok) {
+            coreOpen = false
+            isOwnerMode = false
+            try { voiceController.speak("That seal does not open core.") } catch (_: Exception) {}
+            return
+        }
+        coreOpen = true
+        isOwnerMode = true
+        ownerError = null
+        pendingAction = null
+        getSharedPreferences("sparkx_prefs", MODE_PRIVATE).edit().putBoolean("owner_mode", false).apply()
+        try { voiceController.speak("Core open. I'll ask before I act.") } catch (_: Exception) {}
+    }
+
+    private fun closeCore() {
+        coreOpen = false
+        isOwnerMode = false
+        pendingAction = null
+        pendingLabel = ""
+        getSharedPreferences("sparkx_prefs", MODE_PRIVATE).edit().putBoolean("owner_mode", false).apply()
+        try { voiceController.speak("Core closed.") } catch (_: Exception) {}
     }
 
     private fun showOverlay() {
@@ -274,7 +336,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun hideOverlay() {
-        SparkOverlayController.stopOverlay(this)
+        SparkOverlayController.hideOverlay(this)
         overlayVisible = false
     }
 
@@ -294,17 +356,29 @@ class MainActivity : ComponentActivity() {
 
     private fun processTextCommand(text: String) {
         if (text.isBlank()) return
-        val result = commandRouter.processCommand(text, isOwnerMode)
-        voiceController.speak(result.spokenReply)
-        currentMood = result.newMood
+        try {
+            val result = commandRouter.processCommand(text, isOwnerMode && coreOpen)
+            voiceController.speak(result.spokenReply)
+            currentMood = result.newMood
 
-        if (overlayVisible) {
-            SparkOverlayController.updateMood(this, result.newMood)
-        }
+            if (overlayVisible) {
+                SparkOverlayController.updateMood(this, result.newMood)
+            }
 
-        if (result.requiresConfirmation && result.confirmationAction != null && isOwnerMode) {
-            result.confirmationAction.invoke()
-            voiceController.speak("Action confirmed and executed.")
+            if (result.requiresConfirmation && result.confirmationAction != null) {
+                if (!isOwnerMode || !coreOpen) {
+                    voiceController.speak("Core is closed. I won't do that.")
+                } else {
+                    pendingLabel = result.actionDescription.ifBlank { result.spokenReply }
+                    pendingAction = result.confirmationAction
+                }
+            }
+        } catch (_: Exception) {
+            coreOpen = false
+            isOwnerMode = false
+            pendingAction = null
+            ownerError = "Owner Mode failed. Safe Companion is still on."
+            try { voiceController.speak("That failed. Safe Companion is still here.") } catch (_: Exception) {}
         }
 
         commandInput = ""
@@ -365,6 +439,10 @@ fun SparkXApp(
     onLaunchApp: (String) -> Unit,
     onRequestOverlayPermission: () -> Unit,
     navController: NavHostController,
+    coreOpen: Boolean = false,
+    ownerError: String? = null,
+    onOpenCore: (String) -> Unit = {},
+    onCloseCore: () -> Unit = {},
     avatarPulseKey: Int = 0,
     onAvatarTap: () -> Unit = {}
 ) {
@@ -403,7 +481,27 @@ fun SparkXApp(
             }
         }
     ) { padding ->
-        NavHost(navController, startDestination = "home", modifier = Modifier.padding(padding)) {
+        Column(Modifier.fillMaxSize().padding(padding)) {
+            if (coreOpen) {
+                Text(
+                    text = "Owner Mode Active — All advanced actions require your confirmation",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFF3A2E12))
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    color = Color(0xFFF3E2B0),
+                    fontSize = 13.sp
+                )
+            }
+            if (!ownerError.isNullOrBlank()) {
+                Text(
+                    text = ownerError,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    color = Color(0xFFF3E2B0),
+                    fontSize = 13.sp
+                )
+            }
+            NavHost(navController, startDestination = "home", modifier = Modifier.weight(1f)) {
             composable("home") {
                 SparkXHomeScreen(
                     currentMood = currentMood,
@@ -443,11 +541,15 @@ fun SparkXApp(
                     onToggleOwnerMode = onToggleOwnerMode,
                     overlayVisible = overlayVisible,
                     onToggleOverlay = onToggleOverlay,
-                    onRequestOverlay = onRequestOverlayPermission
+                    onRequestOverlay = onRequestOverlayPermission,
+                    coreOpen = coreOpen,
+                    onSubmitSeal = onOpenCore,
+                    onCloseCore = onCloseCore
                 )
             }
             composable("permissions") { PermissionWizardScreen(onFinish = { navController.popBackStack() }) }
             composable("terms") { TermsScreen(onAgree = { navController.popBackStack() }, onSafeLocal = { navController.popBackStack() }, onExit = { /* handled in MainActivity */ }) }
+            }
         }
     }
 }

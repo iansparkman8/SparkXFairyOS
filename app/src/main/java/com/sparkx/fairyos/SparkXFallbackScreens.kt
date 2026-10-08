@@ -5,16 +5,23 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.sparkx.fairyos.domain.memory.TeachGrowEntry
 
@@ -70,8 +77,12 @@ fun SettingsScreen(
     overlayVisible: Boolean = false,
     onToggleOverlay: () -> Unit = {},
     onRequestOverlay: () -> Unit = {},
+    coreOpen: Boolean = false,
+    onSubmitSeal: (String) -> Unit = {},
+    onCloseCore: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    var seal by remember { mutableStateOf("") }
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -79,23 +90,37 @@ fun SettingsScreen(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("⚙️", color = Color.White)
-        Spacer(Modifier.height(12.dp))
         Text("Settings", color = Color.White)
         Spacer(Modifier.height(8.dp))
         Text(
-            text = "Owner mode: $isOwnerMode · Overlay visible: $overlayVisible",
-            color = Color(0xFFB8AEE8)
+            text = if (coreOpen || isOwnerMode) {
+                "Owner Mode Active — confirm before an action."
+            } else {
+                "Safe Companion · Overlay visible: $overlayVisible"
+            },
+            color = Color(0xFFF3E2B0)
         )
 
         Spacer(Modifier.height(14.dp))
 
-        QuickActionButton(
-            title = "Owner Mode",
-            subtitle = "Toggle protected controls",
-            emoji = "🔐",
-            onClick = onToggleOwnerMode
-        )
+        if (coreOpen) {
+            Button(onClick = onCloseCore) { Text("Close core") }
+        } else {
+            OutlinedTextField(
+                value = seal,
+                onValueChange = { seal = it },
+                label = { Text("Core seal") },
+                visualTransformation = PasswordVisualTransformation(),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(8.dp))
+            Button(onClick = {
+                val entered = seal
+                seal = ""
+                onSubmitSeal(entered)
+            }) { Text("Open core") }
+        }
 
         Spacer(Modifier.height(8.dp))
 
