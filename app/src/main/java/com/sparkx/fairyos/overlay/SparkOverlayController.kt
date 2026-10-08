@@ -13,6 +13,13 @@ object SparkOverlayController {
         ContextCompat.startForegroundService(context, intent)
     }
 
+    fun hideOverlay(context: Context) {
+        val intent = Intent(context, SparkOverlayService::class.java).apply {
+            action = "HIDE_OVERLAY"
+        }
+        context.startService(intent)
+    }
+
     fun stopOverlay(context: Context) {
         val intent = Intent(context, SparkOverlayService::class.java).apply {
             action = "STOP_OVERLAY"

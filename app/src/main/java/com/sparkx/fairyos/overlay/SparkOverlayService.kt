@@ -31,6 +31,7 @@ class SparkOverlayService : Service() {
     private var bubbleView: SparkOverlayAvatarView? = null   // Now using asset-backed avatar
     private var params: WindowManager.LayoutParams? = null
 
+    private var bubbleHidden = false
     private var currentMood = SparkMood.IDLE
     private var isSpeaking = false
     private var isFreeRoam = false
@@ -286,7 +287,12 @@ class SparkOverlayService : Service() {
         val action = intent?.action
 
         when (action) {
-            "START_OVERLAY" -> {
+            "START_OVERLAY", "SHOW_OVERLAY" -> {
+                startForeground(1, createNotification())
+                showBubble()
+            }
+            "HIDE_OVERLAY" -> {
+                hideBubble()
                 startForeground(1, createNotification())
             }
             "STOP_OVERLAY" -> {
@@ -323,36 +329,55 @@ class SparkOverlayService : Service() {
             PendingIntent.FLAG_IMMUTABLE
         )
 
-        val hideIntent = PendingIntent.getService(
+        val showIntent = PendingIntent.getService(
             this, 1,
-            Intent(this, SparkOverlayService::class.java).apply { action = "STOP_OVERLAY" },
-            PendingIntent.FLAG_IMMUTABLE
+            Intent(this, SparkOverlayService::class.java).apply { action = "SHOW_OVERLAY" },
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
-
-        val roamIntent = PendingIntent.getService(
+        val hideIntent = PendingIntent.getService(
             this, 2,
-            Intent(this, SparkOverlayService::class.java).apply {
-                action = "TOGGLE_FREE_ROAM"
-            },
-            PendingIntent.FLAG_IMMUTABLE
+            Intent(this, SparkOverlayService::class.java).apply { action = "HIDE_OVERLAY" },
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        val stopIntent = PendingIntent.getService(
+            this, 3,
+            Intent(this, SparkOverlayService::class.java).apply { action = "STOP_OVERLAY" },
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
         return NotificationCompat.Builder(this, "spark_fairy_overlay")
             .setContentTitle("Spark Baby is with you")
-            .setContentText(
-                if (isFreeRoam) {
-                    "Free-roam mode active"
-                } else {
-                    "Tap bubble to open SparkX Home"
-                }
-            )
+            .setContentText("Show, hide, or stop the bubble. Safe Companion stays on.")
             .setSmallIcon(android.R.drawable.star_on)
+            .setContentIntent(openIntent)
             .setOngoing(true)
-            .addAction(0, "Open", openIntent)
-            .addAction(0, if (isFreeRoam) "Stop Roam" else "Free Roam", roamIntent)
+            .addAction(0, "Show", showIntent)
             .addAction(0, "Hide", hideIntent)
+            .addAction(0, "Stop", stopIntent)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
+    }
+
+    private fun showBubble() {
+        val view = bubbleView ?: return
+        if (!bubbleHidden) return
+        try {
+            windowManager?.addView(view, params)
+            bubbleHidden = false
+        } catch (_: Exception) {
+            bubbleHidden = false
+        }
+    }
+
+    private fun hideBubble() {
+        val view = bubbleView ?: return
+        stopWandering()
+        if (bubbleHidden) return
+        try {
+            windowManager?.removeView(view)
+        } catch (_: Exception) {
+        }
+        bubbleHidden = true
     }
 
     // ==================== FREE-ROAM HELPERS ====================

@@ -2,6 +2,7 @@ package com.sparkx.fairyos.domain.command
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.provider.AlarmClock
 import android.provider.Settings
 import com.sparkx.fairyos.domain.memory.TeachGrowEntry
@@ -67,24 +68,45 @@ class SparkCommandRouter(
             }
             cmd.startsWith("open ") -> {
                 val appName = cmd.removePrefix("open ").trim()
-                val launched = launchAppByName(appName)
-                if (launched) {
-                    CommandResult("Opening $appName for you.", SparkMood.HAPPY)
+                if (appName == "settings" || appName.startsWith("android settings") || appName == "phone settings") {
+                    ownerConfirm(isOwnerMode, "Open Android settings") {
+                        context.startActivity(
+                            Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        )
+                    }
                 } else {
-                    CommandResult("I couldn't find an app matching '$appName'. Try the app drawer.", SparkMood.THINKING)
+                    val launch = findLaunchIntent(appName)
+                    if (launch == null) {
+                        CommandResult("I couldn't find an app matching '$appName'. Try the app drawer.", SparkMood.THINKING)
+                    } else {
+                        ownerConfirm(isOwnerMode, "Open $appName") {
+                            context.startActivity(launch)
+                        }
+                    }
+                }
+            }
+            cmd == "settings" || cmd == "open settings" -> {
+                ownerConfirm(isOwnerMode, "Open Android settings") {
+                    context.startActivity(
+                        Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    )
+                }
+            }
+            cmd.startsWith("call ") || cmd.startsWith("dial ") -> {
+                val who = cmd.removePrefix("call ").removePrefix("dial ").trim().removePrefix("call ").trim()
+                ownerConfirm(isOwnerMode, "Call ${who.ifBlank { "a number" }}") {
+                    val number = Regex("""[+]?\d[\d\s\-().]{2,}""").find(who)?.value
+                    val dial = Intent(Intent.ACTION_DIAL).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    if (number != null) {
+                        dial.data = Uri.parse("tel:" + number.filter { it.isDigit() || it == '+' })
+                    }
+                    context.startActivity(dial)
                 }
             }
             cmd.contains("set timer") || cmd.contains("timer for") -> {
                 val minutes = Regex("""(\d+)""").find(cmd)?.groupValues?.get(1)?.toIntOrNull() ?: 5
-                if (isOwnerMode) {
-                    CommandResult(
-                        "Setting a $minutes minute timer. Confirm?",
-                        requiresConfirmation = true,
-                        actionDescription = "Set $minutes min timer",
-                        confirmationAction = { setTimer(minutes) }
-                    )
-                } else {
-                    CommandResult("Owner Mode is required for setting timers. Enable it in Settings.", SparkMood.ALERT)
+                ownerConfirm(isOwnerMode, "Set $minutes min timer") {
+                    setTimer(minutes)
                 }
             }
 
@@ -282,21 +304,32 @@ class SparkCommandRouter(
         return if (urgentWords.any { text.lowercase().contains(it) }) 3 else 2
     }
 
-    private fun launchAppByName(name: String): Boolean {
+    private fun ownerConfirm(isOwnerMode: Boolean, description: String, action: () -> Unit): CommandResult {
+        if (!isOwnerMode) {
+            return CommandResult(
+                "Owner Mode is required for that. Open core in Settings.",
+                SparkMood.ALERT
+            )
+        }
+        return CommandResult(
+            "$description. Confirm in the dialog.",
+            SparkMood.ALERT,
+            requiresConfirmation = true,
+            confirmationAction = action,
+            actionDescription = description
+        )
+    }
+
+    private fun findLaunchIntent(name: String): Intent? {
         val pm = context.packageManager
         val mainIntent = Intent(Intent.ACTION_MAIN, null).addCategory(Intent.CATEGORY_LAUNCHER)
         val apps = pm.queryIntentActivities(mainIntent, 0)
         val match = apps.firstOrNull {
             it.loadLabel(pm).toString().lowercase().contains(name) ||
-            it.activityInfo.packageName.lowercase().contains(name)
-        }
-        return if (match != null) {
-            val launchIntent = pm.getLaunchIntentForPackage(match.activityInfo.packageName)
-            if (launchIntent != null) {
-                context.startActivity(launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                true
-            } else false
-        } else false
+                it.activityInfo.packageName.lowercase().contains(name)
+        } ?: return null
+        return pm.getLaunchIntentForPackage(match.activityInfo.packageName)
+            ?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
 
     private fun setTimer(minutes: Int) {
